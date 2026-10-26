@@ -56,6 +56,7 @@ node bin/fcx.js verify PASTE_THE_FOLDER_HERE
 - **The token is a password.** While it is valid, it gives full access to your account.
   - Paste it only into `fcx`'s hidden prompt, in your own terminal.
   - **Never paste it into an issue, a chat, or anyone else's tool.**
+  - **Anyone who asks you for your token is trying to take over your account,** even if they say they're from this project. The maintainer will never ask for it.
 - **What `fcx` does with it:**
   - It keeps the token in memory only. It never writes it to disk, prints it or logs it, and error messages are redacted.
   - It sends the token only to `https://client.farcaster.xyz` or `https://farcaster.xyz/~api`, and never along a redirect. Protocol nodes and media hosts never receive it.

@@ -31,6 +31,7 @@ Your follows and followers are also on the protocol, so they are at less risk th
 - **The token is a password.** While it is valid, it gives full access to your account.
   - Paste it only into the script's hidden prompt, in your own terminal.
   - **Never paste it into an issue, a chat, or anywhere else.**
+  - **Anyone who asks you for your token is trying to take over your account,** even if they say they're from this project. The maintainer will never ask for it.
 - **What the script does with it:**
   - It never writes the token to disk and never prints it.
   - At the end, it scans its own output for the token and reports how many files contain it. The number should be 0.

@@ -11,7 +11,7 @@
 ## What it saves
 
 - **Public data, no sign-in needed:** your casts and replies, likes and recasts, following, followers, profile, username proofs, verifications, signers and storage, blocks, channel follows, the casts you replied to or reacted to, and the media of your own casts. Most of this is signed protocol data from public Farcaster nodes. The follow lists, blocks and channel follows are also cross-checked against the Farcaster app's public API.
-- **Private data, with your session token (`--private`):** what exists only on the Farcaster app's servers: bookmarks, direct casts (DMs), drafts, mutes, favourite mini apps, and the media of bookmarked casts.
+- **Private data, with your session token (`--private`):** what exists only on the Farcaster app's servers: bookmarks, direct casts (DMs), drafts, mutes, favourite mini apps, and the media of bookmarked casts. fcx reads them through the app's own undocumented API, which can change or stop working at any time.
 
 Each run writes a new folder under `~/FarcasterExports/` that only you can read.
 
@@ -88,6 +88,7 @@ In every command below, replace `YOUR_FID` with your FID.
 - **Your session token works like a password.** While it is valid, it gives full access to your account.
   - Paste it only into fcx's hidden prompt, in your own terminal.
   - Never paste it into an issue, a chat, or anyone else's tool.
+  - **Anyone who asks you for your token is trying to take over your account,** even if they say they're from this project. The maintainer will never ask for it.
 - **What fcx does with the token:** fcx keeps it in memory only. It sends it only to `https://client.farcaster.xyz` or `https://farcaster.xyz/~api`, and never along a redirect. At the end it scans its own output for the token and prints `Token self-scan: N file(s) contain the token.`, where N should be 0.
 - **Signing out may not revoke the token.** Nobody yet knows whether signing out of farcaster.xyz revokes it.
 - **Your export contains your DMs.** Keep it out of git and cloud sync unless you mean to share it.
