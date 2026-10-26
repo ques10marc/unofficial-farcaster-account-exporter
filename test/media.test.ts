@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
+import http from 'node:http';
+import type { AddressInfo } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { downloadMedia, isPrivateAddress } from '../src/media.ts';
+import { gzipSync } from 'node:zlib';
+import { checkedFetch, downloadMedia, isPrivateAddress } from '../src/media.ts';
 import { ExportWriter } from '../src/writer.ts';
 
 const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489', 'hex');
@@ -96,4 +99,82 @@ test('media: once stored media reach the total cap, the remaining URLs are skipp
   assert.equal(stats.withFinalStatus, 4);
   assert.equal(logs.length, 1);
   assert.match(logs[0], /skipping the remaining 2 URLs/);
+});
+
+// A local server for the tests below, which make real connections; close() also drops kept-alive sockets.
+async function serve(handler: http.RequestListener): Promise<{ port: number; close: () => void }> {
+  const server = http.createServer(handler);
+  await new Promise<void>((done) => server.listen(0, '127.0.0.1', done));
+  return {
+    port: (server.address() as AddressInfo).port,
+    close: () => {
+      server.closeAllConnections();
+      server.close();
+    },
+  };
+}
+
+test('media: the connection goes only to an address that passed the check (DNS rebinding)', { timeout: 10_000 }, async () => {
+  const hits: string[] = [];
+  const srv = await serve((req, res) => {
+    hits.push(req.url ?? '');
+    res.writeHead(200, { 'content-type': 'image/png' }).end(PNG);
+  });
+  // The host answers the check with a public address and every later lookup with a private one.
+  // 'localhost.' gets past the name check, and the system resolver sends it to 127.0.0.1: that is where
+  // a second, unchecked lookup would connect.
+  const answers = [['93.184.216.34']];
+  const resolve = async () => answers.shift() ?? ['127.0.0.1'];
+  const w = ExportWriter.create(fs.mkdtempSync(path.join(os.tmpdir(), 'fcx-media-')), 1);
+  try {
+    const { rows } = await downloadMedia([{ url: `http://localhost.:${srv.port}/x.png`, castHash: '0x01' }], w, { resolve, wait: async () => {} });
+    assert.match(rows[0].error ?? '', /refused private address/);
+    assert.deepEqual(hits, []);
+  } finally {
+    srv.close();
+  }
+});
+
+test('media: over real connections, a redirect to a stored image, a 404, a refused encoded body, and the headers sent', { timeout: 10_000 }, async () => {
+  const seen: (string | undefined)[][] = [];
+  const srv = await serve((req, res) => {
+    seen.push([req.url, req.headers['user-agent'], req.headers['accept-encoding'], req.headers.accept]);
+    if (req.url === '/r') res.writeHead(302, { location: '/a.png' }).end();
+    else if (req.url === '/a.png') res.writeHead(200, { 'content-type': 'image/png' }).end(PNG);
+    else if (req.url === '/gz.png') res.writeHead(200, { 'content-type': 'image/png', 'content-encoding': 'gzip' }).end(gzipSync(PNG));
+    else res.writeHead(404, { 'content-type': 'text/plain' }).end('nope');
+  });
+  // The check sees a public address; only the test's `refuse` lets the connection reach 127.0.0.1.
+  const fetchImpl = checkedFetch(async () => ['127.0.0.1'], () => false);
+  const base = `http://media.test:${srv.port}`;
+  const refs = ['/r', '/gone.jpg', '/gz.png'].map((p, i) => ({ url: base + p, castHash: `0x0${i}` }));
+  const w = ExportWriter.create(fs.mkdtempSync(path.join(os.tmpdir(), 'fcx-media-')), 1);
+  try {
+    const { rows } = await downloadMedia(refs, w, { fetchImpl, resolve: async () => ['93.184.216.34'], wait: async () => {} });
+    const sha = createHash('sha256').update(PNG).digest('hex');
+    assert.equal(rows[0].status, 200);
+    assert.equal(rows[0].finalUrl, `${base}/a.png`);
+    assert.equal(rows[0].sha256, sha);
+    assert.deepEqual(fs.readFileSync(path.join(w.root, rows[0].path ?? '')), PNG);
+    assert.equal(rows[1].status, 404);
+    assert.equal(rows[1].stored, false);
+    assert.match(rows[2].error ?? '', /refused content-encoding gzip/);
+    assert.deepEqual(seen.map((s) => s[0]), ['/r', '/a.png', '/gone.jpg', '/gz.png']);
+    for (const s of seen) assert.deepEqual(s.slice(1), ['node', 'identity', 'image/*,video/*,audio/*,*/*;q=0.5']);
+  } finally {
+    srv.close();
+  }
+});
+
+test('media: the timeout also covers a body that stops arriving', { timeout: 10_000 }, async () => {
+  const srv = await serve((_req, res) => {
+    res.writeHead(200, { 'content-type': 'image/png' });
+    res.write(PNG.subarray(0, 8));
+  });
+  try {
+    const res = await checkedFetch(async () => ['127.0.0.1'], () => false)(new URL(`http://media.test:${srv.port}/slow.png`), { signal: AbortSignal.timeout(200) });
+    await assert.rejects(res.arrayBuffer());
+  } finally {
+    srv.close();
+  }
 });

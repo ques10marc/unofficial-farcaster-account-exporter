@@ -6,11 +6,16 @@
 // checked, and hosts that are or resolve to loopback/private/link-local addresses are refused, IPv4
 // addresses written as IPv6 included. Only image/video/audio/pdf/playlist bodies are stored; other
 // responses (web pages) get a status only. Each body is capped at MAX_BYTES, and once the stored media
-// reach MAX_TOTAL_BYTES the remaining URLs are skipped without a request.
+// reach MAX_TOTAL_BYTES the remaining URLs are skipped without a request. Requests connect only to an
+// address that passed the check, so a host can't pass with one DNS answer and then be reached at another
+// (DNS rebinding).
 
 import { createHash } from 'node:crypto';
 import dns from 'node:dns';
+import http from 'node:http';
+import https from 'node:https';
 import net from 'node:net';
+import { Readable } from 'node:stream';
 import type { ExportWriter } from './writer.ts';
 import { errMessage, interrupt, sleep } from './util.ts';
 
@@ -119,6 +124,50 @@ async function checkUrl(raw: string, resolve: Resolver): Promise<URL> {
   return u;
 }
 
+// net.connect's lookup for media requests. The address check and the connection share one DNS answer,
+// so a host can't pass checkUrl with a public address and then be reached at a private one.
+function checkedLookup(resolve: Resolver, refuse: (ip: string) => boolean): net.LookupFunction {
+  return (hostname, options, callback) => {
+    resolve(hostname).then(
+      (addrs) => {
+        const found = addrs.map((address) => ({ address, family: net.isIPv6(address) ? 6 : 4 })).filter((a) => !options.family || a.family === options.family);
+        if (addrs.some(refuse)) callback(new Error(`refused private address for ${hostname}`), '');
+        else if (!found.length) callback(new Error(`no address for ${hostname}`), '');
+        else if (options.all) callback(null, found);
+        else callback(null, found[0].address, found[0].family);
+      },
+      (e: Error) => callback(e, ''),
+    );
+  };
+}
+
+// fetch() for media over node:http(s), connecting through checkedLookup; fetch() itself would look the
+// host up again. It sends fetch()'s user-agent and asks for the body unencoded: nothing here decodes one,
+// so an encoded body is refused. `refuse` is replaceable only so tests can reach a local server.
+export function checkedFetch(resolve: Resolver, refuse: (ip: string) => boolean = isPrivateAddress): typeof fetch {
+  return ((url: URL, init: RequestInit = {}) =>
+    new Promise<Response>((ok, fail) => {
+      const headers = { 'user-agent': 'node', ...Object.fromEntries(new Headers(init.headers)), 'accept-encoding': 'identity' };
+      const req = (url.protocol === 'https:' ? https : http).request(url, { headers, lookup: checkedLookup(resolve, refuse), signal: init.signal ?? undefined }, (res) => {
+        try {
+          const encoding = res.headers['content-encoding'];
+          if (encoding && encoding.toLowerCase() !== 'identity') throw new Error(`refused content-encoding ${encoding}`);
+          const out = new Headers();
+          for (let i = 0; i < res.rawHeaders.length; i += 2) out.append(res.rawHeaders[i], res.rawHeaders[i + 1]);
+          const status = res.statusCode ?? 0;
+          const empty = status === 204 || status === 205 || status === 304; // a Response can't carry a body for these
+          if (empty) res.resume();
+          ok(new Response(empty ? null : (Readable.toWeb(res) as ReadableStream), { status, headers: out }));
+        } catch (e) {
+          res.destroy();
+          fail(e);
+        }
+      });
+      req.on('error', fail);
+      req.end();
+    })) as typeof fetch;
+}
+
 async function readCapped(res: Response): Promise<Buffer> {
   if (!res.body) return Buffer.alloc(0);
   const chunks: Buffer[] = [];
@@ -136,8 +185,8 @@ export async function downloadMedia(
   writer: ExportWriter,
   opts: { fetchImpl?: typeof fetch; resolve?: Resolver; log?: (s: string) => void; wait?: (ms: number) => Promise<void>; maxTotalBytes?: number } = {},
 ): Promise<{ rows: MediaIndexRow[]; stats: MediaStats; interrupted: boolean }> {
-  const fetchImpl = opts.fetchImpl ?? fetch;
   const resolve = opts.resolve ?? defaultResolver;
+  const fetchImpl = opts.fetchImpl ?? checkedFetch(resolve);
   const wait = opts.wait ?? sleep;
   const byUrl = new Map<string, string[]>();
   const originsByUrl = new Map<string, MediaOrigin[]>();

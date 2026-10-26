@@ -84,7 +84,7 @@ Reason codes come from a closed set: `self_follow`, `hidden_by_client`, `client_
 
 - One request at a time per host. Protocol, client API and media run as three concurrent lanes, because they use different hosts.
 - A 429 is retried after its `Retry-After`, or with exponential backoff from 30 s. Retryable protocol errors are retried with backoff. A 5xx from the primary client host switches the run to the fallback host.
-- Media URLs are chosen by cast authors, so they are untrusted. A URL whose host is, or resolves to, a loopback, private, link-local or multicast address is refused, including an IPv4 address written as IPv6, and so is a redirect to one; at most 5 redirects are followed. Each file is capped at 100 MiB. Once the stored media reach 20 GiB, the remaining URLs are skipped without a request and listed in `media/index.jsonl` with an error.
+- Media URLs are chosen by cast authors, so they are untrusted. A URL whose host is, or resolves to, a loopback, private, link-local or multicast address is refused, including an IPv4 address written as IPv6, and so is a redirect to one; at most 5 redirects are followed. The connection goes only to an address that passed this check, so a host can't pass it with one DNS answer and then be reached at another. Media are requested without compression, and a compressed response is refused. Each file is capped at 100 MiB. Once the stored media reach 20 GiB, the remaining URLs are skipped without a request and listed in `media/index.jsonl` with an error.
 - There is no resume yet: after an interruption, run the export again. It writes a new directory.
 
 ## Acceptance criteria
