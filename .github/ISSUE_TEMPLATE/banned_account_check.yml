@@ -1,0 +1,87 @@
+name: Banned or restricted account
+description: Tell us what fcx could export from an account that the Farcaster app banned or restricted.
+title: "[account access] "
+labels: ["account-access"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you. Nobody yet knows what a banned or restricted account can still export, so every result helps, including failures.
+        Never paste your session token. Your FID and username are not needed.
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy check
+      options:
+        - label: This report contains no session token, no DM, bookmark or draft text, and no export files.
+          required: true
+  - type: dropdown
+    id: restriction
+    attributes:
+      label: What happened to the account in the Farcaster app?
+      options:
+        - Banned (can't use the app)
+        - Restricted to read-only
+        - Not sure
+        - Other (explain below)
+    validations:
+      required: true
+  - type: dropdown
+    id: web-sign-in
+    attributes:
+      label: Can you still sign in at farcaster.xyz in a desktop browser?
+      options:
+        - "Yes"
+        - "No"
+        - Didn't try
+    validations:
+      required: true
+  - type: dropdown
+    id: public-export
+    attributes:
+      label: Public export (fcx export --fid YOUR_FID, no token)
+      options:
+        - Finished with exit code 0
+        - Failed
+        - Didn't run
+    validations:
+      required: true
+  - type: dropdown
+    id: auth-check
+    attributes:
+      label: Result of fcx auth-check --fid YOUR_FID
+      options:
+        - "OK: token accepted"
+        - "Failed: HTTP 401"
+        - "Failed: HTTP 403"
+        - Failed with another error (paste it below)
+        - "No token: couldn't sign in to copy one"
+        - Didn't run
+    validations:
+      required: true
+  - type: dropdown
+    id: private-export
+    attributes:
+      label: Private export (fcx export --private) or quick capture
+      options:
+        - Finished with exit code 0
+        - Finished, but some datasets are not complete
+        - Failed
+        - Didn't run
+    validations:
+      required: true
+  - type: input
+    id: when
+    attributes:
+      label: Date you ran it (UTC)
+      placeholder: "2026-10-15"
+  - type: textarea
+    id: output
+    attributes:
+      label: Error lines or fcx verify output (optional)
+      description: Statuses and counts only. Replace your home folder path with `~`.
+      render: text
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else

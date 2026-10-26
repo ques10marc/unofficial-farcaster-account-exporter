@@ -1,0 +1,27 @@
+name: Feature request
+description: Suggest something fcx should export or do.
+title: "[feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please don't include a session token or any private data (DM, bookmark or draft text, export files).
+  - type: textarea
+    id: need
+    attributes:
+      label: What do you want to be able to do?
+    validations:
+      required: true
+  - type: textarea
+    id: ideas
+    attributes:
+      label: Ideas for how (optional)
+  - type: dropdown
+    id: contribute
+    attributes:
+      label: Would you like to work on it?
+      options:
+        - "No"
+        - Yes, with some guidance
+        - "Yes"

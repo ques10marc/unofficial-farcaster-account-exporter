@@ -1,0 +1,11 @@
+# Exports contain private data (DMs, bookmarks). They live in ~/FarcasterExports/, never in git.
+fc-export-*
+quick-*/
+FarcasterExports/
+# Secrets
+.env
+.env.*
+*.token
+# Tooling
+node_modules/
+.DS_Store
