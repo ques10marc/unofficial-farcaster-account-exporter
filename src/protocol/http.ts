@@ -16,7 +16,7 @@ import {
   UserNameProof,
   onChainEventTypeToJSON,
 } from '@farcaster/core';
-import { errMessage, fromB64, fromHex, toB64, toHex } from '../util.ts';
+import { errMessage, fromB64, fromHex, toB64, toHex, USER_AGENT } from '../util.ts';
 import { isAllNullShardToken } from './paginate.ts';
 import { type EventPage, type MessagePage, type ProtocolTransport, type ShardBlock, type SignerPage, type Store, TransportError, unsupported } from './types.ts';
 
@@ -120,7 +120,7 @@ export class HttpTransport implements ProtocolTransport {
     for (const [k, v] of Object.entries(params)) if (v !== undefined) url.searchParams.set(k, String(v));
     let res: Response;
     try {
-      res = await this.fetchImpl(url, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(TIMEOUT_MS) });
+      res = await this.fetchImpl(url, { headers: { accept: 'application/json', 'user-agent': USER_AGENT }, signal: AbortSignal.timeout(TIMEOUT_MS) });
     } catch (e) {
       throw new TransportError(`${this.label} ${path}: ${errMessage(e)}`, { retryable: true, code: 'network' });
     }

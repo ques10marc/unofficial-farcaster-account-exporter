@@ -6,6 +6,7 @@
 
 import { getSSLClient, Metadata, type HubServiceClient } from '@farcaster/hub-nodejs';
 import type { GetInfoResponse, Message, OnChainEventType, SignersByFidResponse, StorageLimitsResponse, UsernameProofsResponse } from '@farcaster/core';
+import { USER_AGENT } from '../util.ts';
 import { type EventPage, type MessagePage, type ProtocolTransport, type ShardBlock, type SignerPage, type Store, TransportError } from './types.ts';
 
 const PAGE_SIZE = 1000; // per shard, as seen on snap.farcaster.xyz
@@ -44,9 +45,10 @@ export class GrpcTransport implements ProtocolTransport {
   readonly kind = 'grpc' as const;
   private readonly client: HubServiceClient;
 
-  constructor(address: string) {
+  // makeClient is replaceable only so a test can reach a local plaintext server.
+  constructor(address: string, makeClient: typeof getSSLClient = getSSLClient) {
     this.label = `grpc://${address}`;
-    this.client = getSSLClient(address);
+    this.client = makeClient(address, { 'grpc.primary_user_agent': USER_AGENT });
   }
 
   private call<T>(method: string, request: object): Promise<T> {
