@@ -32,7 +32,8 @@ function parseArgs(argv) {
     else if (a === '--out') args.out = argv[++i];
     else if (a === '--base') { args.base = argv[++i].replace(/\/+$/, ''); args.baseExplicit = true; }
     else if (a === '--help' || a === '-h') args.help = true;
-    else throw new Error(`Unknown argument: ${a}`);
+    // Named only if it looks like a flag: anything else may be a token pasted in the wrong place.
+    else throw new Error(/^-{0,2}[A-Za-z][A-Za-z-]{0,30}$/.test(a) ? `Unknown argument: ${a}` : 'Unknown argument, not shown in case it is your session token. If it is, it is now saved in your shell history: delete it from there, and paste the token only at the hidden prompt.');
   }
   if (args.fid !== undefined && !(Number.isInteger(args.fid) && args.fid > 0)) throw new Error('--fid must be a positive integer');
   if (args.publicOnly && !args.fid) throw new Error('--public-only needs --fid');
@@ -287,4 +288,9 @@ async function main() {
 const args = (() => {
   try { return parseArgs(process.argv.slice(2)); } catch (e) { console.error(e.message); process.exit(64); }
 })();
-main().then((code) => process.exit(code), (e) => { console.error(`Error: ${redact(e.message)}`); process.exit(1); });
+// The last resort for errors, including any thrown outside main()'s promise chain, which Node would
+// otherwise print unredacted.
+const crash = (e) => { console.error(`Error: ${redact(e instanceof Error ? e.message : e)}`); process.exit(1); };
+process.on('uncaughtException', crash);
+process.on('unhandledRejection', crash);
+main().then((code) => process.exit(code), crash);

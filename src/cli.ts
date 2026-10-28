@@ -38,6 +38,13 @@ class UsageError extends Error {}
 // A problem the user can fix (a token that cannot be read): printed without a stack trace.
 class UserError extends Error {}
 
+// A rejected argument or command is named only if it looks like one. Anything else may be a session token
+// pasted in the wrong place, and usage errors end up in bug reports.
+const named = (what: string, a: string) =>
+  /^-{0,2}[A-Za-z][A-Za-z-]{0,30}$/.test(a)
+    ? `${what}: ${a}`
+    : `${what}, not shown in case it is your session token. If it is, it is now saved in your shell history: delete it from there, and paste the token only at the hidden prompt.`;
+
 const getToken = () =>
   readSessionToken().catch((e: unknown) => {
     throw new UserError(e instanceof Error ? e.message : String(e));
@@ -49,7 +56,7 @@ function parseFlags(argv: string[], allowed: Set<string>) {
   const o: { fid?: number; out: string; media: string; hub?: string; base?: string; private: boolean } = { out: path.join(os.homedir(), 'FarcasterExports'), media: DEFAULT_MEDIA, private: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (!allowed.has(a)) throw new UsageError(`unknown argument: ${a}`);
+    if (!allowed.has(a)) throw new UsageError(named('unknown argument', a));
     const val = () => {
       const v = argv[++i];
       if (v === undefined) throw new UsageError(`${a} needs a value`);
@@ -124,8 +131,17 @@ export async function main(argv: string[]): Promise<number> {
     console.log(formatHits(hits));
     return hits.length ? 0 : 1;
   }
-  throw new UsageError(`unknown command: ${cmd}`);
+  throw new UsageError(named('unknown command', cmd));
 }
+
+// The last resort for errors, including any thrown outside main()'s promise chain, which Node would
+// otherwise print unredacted.
+const crash = (e: unknown) => {
+  console.error(`Error: ${redactRegistered(e instanceof Error ? (e.stack ?? e.message) : e)}`);
+  process.exit(1);
+};
+process.on('uncaughtException', crash);
+process.on('unhandledRejection', crash);
 
 main(process.argv.slice(2)).then(
   (code) => process.exit(code),
@@ -138,7 +154,6 @@ main(process.argv.slice(2)).then(
       console.error(`Error: ${redactRegistered(e.message)}`);
       process.exit(1);
     }
-    console.error(`Error: ${redactRegistered(e instanceof Error ? (e.stack ?? e.message) : e)}`);
-    process.exit(1);
+    crash(e);
   },
 );
