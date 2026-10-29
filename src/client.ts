@@ -8,11 +8,14 @@
 // The session token is sent only on requests marked auth, only to the hosts in secrets.TOKEN_HOSTS (or a
 // loopback mock), and redirects are never followed with it.
 
-import { tokenHostAllowed } from './secrets.ts';
-import { errMessage, interrupt, RateLimiter, sleep } from './util.ts';
+import { safeErrorText, tokenHostAllowed } from './secrets.ts';
+import { interrupt, RateLimiter, sleep } from './util.ts';
 
 export const CLIENT_BASES = ['https://client.farcaster.xyz', 'https://farcaster.xyz/~api'];
 const TIMEOUT_MS = 30_000;
+// Network errors (no response, or a body that fails mid-read) are retried with waits of 2, 4, 8, 16, 32
+// and then 60 s: about 5 minutes in all, enough to ride out a Wi-Fi reconnect.
+const NETWORK_ATTEMPTS = 10;
 
 export interface ClientResponse {
   status: number;
@@ -110,14 +113,20 @@ export class ClientApi {
       if (waited > 5000) this.log(`    rate budget: waited ${Math.round(waited / 1000)}s`);
       this.requests++;
       let res: Response;
+      let text: string;
       try {
         res = await this.fetchImpl(url, { headers, redirect: o.auth ? 'manual' : 'follow', signal: AbortSignal.timeout(TIMEOUT_MS) });
+        // The timeout also covers the body, so a connection that dies mid-body is retried like one that
+        // never answered.
+        text = await res.text();
       } catch (e) {
-        if (attempt >= 6 || interrupt.requested) return { status: 0, text: '', url: url.toString(), error: errMessage(e) };
-        await this.wait(Math.min(60_000, 2000 * 2 ** (attempt - 1)));
+        // The error ends up in a source's status in the manifest, so it gets the status length cap.
+        if (attempt >= NETWORK_ATTEMPTS || interrupt.requested) return { status: 0, text: '', url: url.toString(), error: safeErrorText(e, 200) };
+        const ms = Math.min(60_000, 2000 * 2 ** (attempt - 1));
+        this.log(`    network error, retry ${attempt} in ${Math.round(ms / 1000)}s: ${safeErrorText(e)}`);
+        await this.wait(ms);
         continue;
       }
-      const text = await res.text();
       if (res.status === 429 && attempt <= 12 && !interrupt.requested) {
         const ra = Number(res.headers.get('retry-after'));
         backoff = Number.isFinite(ra) && ra > 0 ? ra * 1000 : Math.min(15 * 60_000, Math.max(30_000, backoff * 2));

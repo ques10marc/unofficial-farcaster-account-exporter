@@ -10,10 +10,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
+import { ClientApi, type ClientOptions } from '../src/client.ts';
 import { TransportError } from '../src/protocol/types.ts';
-import { scanTreeForSecret } from '../src/secrets.ts';
+import { registerSecret, safeErrorText, scanTreeForSecret } from '../src/secrets.ts';
 import { verifyExport } from '../src/verify.ts';
 import { fixture, replayExport } from './helpers.ts';
+import { mockPrivateExport } from './private-run.ts';
 import { ReplayTransport } from './replay.ts';
 
 const SENTINEL = `fcx-sentinel-${randomUUID()}`;
@@ -69,10 +71,10 @@ test('a server echoing the token into a saved page makes the export exit 2', asy
 
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'fcx-home-'));
 // preload: module source that runs before the program. The sentinel is only ever in FC_SESSION_TOKEN.
-function run(args: string[], o: { token?: boolean; preload?: string } = {}): { code: number | null; out: string } {
+function run(args: string[], o: { token?: boolean; preload?: string; timeout?: number } = {}): { code: number | null; out: string } {
   const env: Record<string, string> = { PATH: process.env.PATH ?? '', HOME: home, ...(o.token ? { FC_SESSION_TOKEN: SENTINEL } : {}) };
   const pre = o.preload ? ['--import', `data:text/javascript,${encodeURIComponent(o.preload)}`] : [];
-  const p = spawnSync(process.execPath, [...pre, ...args], { cwd: repo, env, encoding: 'utf8', timeout: 20_000 });
+  const p = spawnSync(process.execPath, [...pre, ...args], { cwd: repo, env, encoding: 'utf8', timeout: o.timeout ?? 20_000 });
   return { code: p.status, out: p.stdout + p.stderr };
 }
 const FCX = ['bin/fcx.js', 'export', '--fid', '11'];
@@ -105,6 +107,121 @@ test('an error thrown or rejected outside the main promise chain is printed reda
       assert.match(r.out, new RegExp(`Error: ${kind} with \\[REDACTED\\]`));
     }
   }
+});
+
+// ---------- new error paths: retries, failing sources, a stopped lane ----------
+// Each puts the sentinel inside an error message. The in-memory manifest and the client's own log lines
+// are checked as well as the files, so the redaction at the source is tested, not just the final pass
+// over manifest.json.
+
+// A client whose fetch makes the first `times` responses for one path fail mid-body, with the token in
+// the error.
+const failingBodyClient = (pathname: string, times: number) => (o: ClientOptions) => {
+  let n = 0;
+  const inner = o.fetchImpl ?? fetch;
+  const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => {
+    if (new URL(input instanceof Request ? input.url : input.toString()).pathname.endsWith(pathname) && n++ < times) {
+      const body = new ReadableStream({
+        start(c) {
+          c.enqueue(new TextEncoder().encode('{"result":'));
+          c.error(new Error(`connection reset, peer said ${SENTINEL}`));
+        },
+      });
+      return new Response(body, { status: 200 });
+    }
+    return inner(input, init);
+  }) as typeof fetch;
+  return new ClientApi({ ...o, fetchImpl });
+};
+const assertNoSentinel = (dir: string, ...logs: string[][]) => {
+  assert.equal(scanTreeForSecret(dir, SENTINEL).hits.length, 0, 'token in a file');
+  for (const l of logs) assert.ok(!l.join('\n').includes(SENTINEL), 'token in a log');
+};
+
+test('a client body that fails with the token in its error: the retry line is redacted, and the run completes', async () => {
+  const r = await mockPrivateExport({ token: SENTINEL, makeClient: failingBodyClient('/v2/draft-casts', 1) });
+  assert.equal(r.result.exitCode, 0, r.logs.join('\n'));
+  assert.ok(r.logs.includes('    network error, retry 1 in 2s: connection reset, peer said [REDACTED]'), r.logs.join('\n'));
+  assertNoSentinel(r.result.dir, r.logs);
+});
+
+test('a client source that keeps failing with the token in its error: its status is redacted', async () => {
+  const r = await mockPrivateExport({ token: SENTINEL, makeClient: failingBodyClient('/v2/draft-casts', Infinity) });
+  const m = r.result.manifest;
+  assert.equal(r.result.exitCode, 1);
+  assert.equal(m.sources['client:drafts'].status, 'error:network:connection reset, peer said [REDACTED]');
+  assert.equal(m.datasets.D11.status, 'error:client:drafts');
+  assert.match(fs.readFileSync(path.join(r.result.dir, 'manifest.json'), 'utf8'), /error:network:connection reset, peer said \[REDACTED\]/);
+  assertNoSentinel(r.result.dir, r.logs);
+});
+
+class ThrowingClient extends ClientApi {
+  async paginate(path: string, params: Record<string, string | number>, itemsKey: string, limit: number, o: { auth?: boolean } = {}) {
+    if (path === '/v2/get-muted-users') throw new Error(`parser broke on ${SENTINEL}`);
+    return super.paginate(path, params, itemsKey, limit, o);
+  }
+}
+
+test('an exception in one client source, with the token in it: recorded redacted, and the lane goes on', async () => {
+  const r = await mockPrivateExport({ token: SENTINEL, makeClient: (o) => new ThrowingClient(o) });
+  const m = r.result.manifest;
+  assert.equal(m.sources['client:muted-users'].status, 'error:exception:parser broke on [REDACTED]');
+  assert.equal(m.datasets.D12.status, 'error:client:muted-users');
+  assert.equal(m.sources['client:favorite-mini-apps'].status, 'complete', 'the next source still ran');
+  assert.equal(m.laneErrors, undefined);
+  assert.equal(r.result.exitCode, 1);
+  assertNoSentinel(r.result.dir, r.logs);
+});
+
+test('a client lane that stops with the token in its error: laneErrors and the summary line are redacted', async () => {
+  const logs: string[] = [];
+  let thrown = false;
+  // An error outside any one source (here, from the log sink) stops the whole lane.
+  const log = (s: string) => {
+    logs.push(s);
+    if (!thrown && s.includes('client:dm-conversations-void')) {
+      thrown = true;
+      throw new Error(`log sink failed near ${SENTINEL}`);
+    }
+  };
+  const r = await mockPrivateExport({ token: SENTINEL, export: { log } });
+  assert.deepEqual(r.result.manifest.laneErrors, ['client lane failed (last source started: dm-conversations-void): log sink failed near [REDACTED]']);
+  assert.ok(logs.some((l) => l.startsWith('Lane errors: client lane failed (last source started: dm-conversations-void): log sink failed near [REDACTED]. Not fetched: ')), logs.join('\n'));
+  assertNoSentinel(r.result.dir, logs, r.logs);
+});
+
+test('safeErrorText redacts before it truncates, so a cut never leaves part of a token', () => {
+  registerSecret(SENTINEL);
+  assert.equal(safeErrorText(new Error('x'.repeat(5000))), `${'x'.repeat(300)}…`);
+  // The sentinel straddles the 300-character cut.
+  const straddle = safeErrorText(new Error(`${'x'.repeat(295)}${SENTINEL}`));
+  assert.ok(!straddle.includes(SENTINEL.slice(0, 5)), straddle);
+  assert.equal(straddle, `${'x'.repeat(295)}[REDA…`);
+});
+
+// Replaces fetch for quick capture: every endpoint answers with empty results, except that the first
+// drafts request's body fails partway, with the token in the error.
+const QUICK_BODY_FAILS = `
+let failed = false;
+globalThis.fetch = async (u) => {
+  const url = new URL(String(u));
+  if (url.pathname === '/v2/draft-casts' && !failed) {
+    failed = true;
+    const body = new ReadableStream({ start(c) { c.enqueue(new TextEncoder().encode('{"result":')); c.error(new Error('connection reset, peer said ' + process.env.FC_SESSION_TOKEN)); } });
+    return new Response(body, { status: 200 });
+  }
+  const result = { user: { fid: 11, username: 'stub' }, bookmarks: [], conversations: [], messages: [], drafts: [], mutedUsers: [], frames: [], channels: [], blockedUsers: [], users: [] };
+  return new Response(JSON.stringify({ result }), { status: 200, headers: { 'content-type': 'application/json' } });
+};`;
+
+test('quick capture: a body that fails with the token in its error is retried, and the retry line is redacted', { timeout: 90_000 }, () => {
+  // About 18 requests, paced 600 ms apart, plus one 2 s retry wait.
+  const r = run(QUICK, { token: true, preload: QUICK_BODY_FAILS, timeout: 60_000 });
+  assert.equal(r.code, 0, r.out);
+  assert.ok(!r.out.includes(SENTINEL), 'token printed');
+  assert.match(r.out, /network error, retry 1 in 2s: connection reset, peer said \[REDACTED\]/);
+  assert.match(r.out, /\bdrafts\s+empty\b/);
+  assert.equal(scanTreeForSecret(home, SENTINEL).hits.length, 0);
 });
 
 test('the repo contains no sentinel after the runs', () => {

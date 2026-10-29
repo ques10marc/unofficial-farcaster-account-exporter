@@ -51,9 +51,9 @@ import { GrpcTransport } from './protocol/grpc.ts';
 import { HttpTransport } from './protocol/http.ts';
 import { type ProtocolTransport, type Store, STORE_LIMIT_NAME, TransportError } from './protocol/types.ts';
 import { clientEdges, mergeGraph, type ProtoEdge, reconcile } from './reconcile.ts';
-import { capturePrivate, type CaptureHelpers, DM_CATEGORIES, mutedKeywordList, type PrivateData } from './private.ts';
+import { capturePrivate, type CaptureHelpers, DM_CATEGORIES, emptyPrivateData, mutedKeywordList, type PrivateData } from './private.ts';
 import { RECONCILIATION_SCHEMA, SCHEMAS } from './schemas.ts';
-import { makeRedactor, registerSecret, scanTreeForSecrets, tokenFromEnv } from './secrets.ts';
+import { makeRedactor, registerSecret, safeErrorText, scanTreeForSecrets, tokenFromEnv } from './secrets.ts';
 import { errMessage, fcTimeToIso, fromHex, interrupt, LIBRARIES, toHex, VERSION } from './util.ts';
 import { ExportWriter } from './writer.ts';
 
@@ -165,6 +165,17 @@ const NOT_REQUESTED = 'unavailable:private-not-requested';
 const pad = (n: number) => String(n).padStart(4, '0');
 const finished = (s: string | undefined) => s === 'complete' || s === 'empty';
 
+// A dataset's sources that are missing because their lane (the name's prefix: protocol, client or media)
+// stopped early. Any such source makes the dataset error:<lane>-lane-aborted, so a stopped lane never
+// leaves a dataset looking complete or not requested.
+export function laneAbortStatus(sources: string[], registered: (source: string) => boolean, failedLanes: ReadonlySet<string>): { status: string; lane: string; missing: string[] } | null {
+  const laneOf = (s: string) => s.split(':')[0];
+  const missing = sources.filter((s) => !registered(s) && failedLanes.has(laneOf(s)));
+  if (!missing.length) return null;
+  const lane = laneOf(missing[0]);
+  return { status: `error:${lane}-lane-aborted`, lane, missing };
+}
+
 const isHttpBase = (s: string) => /^https?:\/\//.test(s);
 const hostOf = (s: string) => {
   try {
@@ -233,6 +244,8 @@ export async function runExport(opts: ExportOptions): Promise<ExportResult> {
     tokenScan: { ran: false, note: 'not run yet' },
   };
   const S = manifest.sources;
+  // The source each lane started last, named if the lane stops.
+  const laneAt: Record<string, string> = {};
 
   log(`Account: fid ${fid}${auth?.username ? ` (@${auth.username})` : ''}`);
   if (auth) log(`Token:   ${auth.message}`);
@@ -286,6 +299,7 @@ export async function runExport(opts: ExportOptions): Promise<ExportResult> {
   ): Promise<{ items: T[]; transport: ProtocolTransport | null }> {
     const entry: SourceEntry = { kind: 'protocol', host: null, paginated: true, status: 'error:not-started', pages: 0, items: 0, lastCursorEmpty: false, files: [] };
     S[name] = entry;
+    laneAt.protocol = name;
     const fallbackErrors: string[] = [];
     for (const t of usable(fallbackErrors)) {
       if (interrupt.requested) break;
@@ -312,6 +326,7 @@ export async function runExport(opts: ExportOptions): Promise<ExportResult> {
   async function protoSingle<T>(name: string, call: (t: ProtocolTransport) => Promise<T>, write: (v: T, t: ProtocolTransport) => string[], count: (v: T) => number): Promise<T | null> {
     const entry: SourceEntry = { kind: 'protocol', host: null, paginated: false, status: 'error:not-started', pages: 0, items: 0, lastCursorEmpty: null, files: [] };
     S[name] = entry;
+    laneAt.protocol = name;
     const fallbackErrors: string[] = [];
     for (const t of usable(fallbackErrors)) {
       if (interrupt.requested) break;
@@ -453,6 +468,7 @@ export async function runExport(opts: ExportOptions): Promise<ExportResult> {
     const name = 'protocol:key-messages';
     const entry: SourceEntry = { kind: 'protocol', host: null, paginated: false, status: 'error:not-started', pages: 0, items: 0, lastCursorEmpty: null, files: [] };
     S[name] = entry;
+    laneAt.protocol = name;
     const notes: string[] = [];
     const targets: KeyTarget[] = [];
     for (const s of signerPages.flatMap((p) => p.signers)) {
@@ -528,6 +544,7 @@ export async function runExport(opts: ExportOptions): Promise<ExportResult> {
     const name = 'protocol:bookmarked-casts';
     const entry: SourceEntry = { kind: 'protocol', host: null, paginated: false, status: 'error:not-started', pages: 0, items: 0, lastCursorEmpty: null, files: [] };
     S[name] = entry;
+    laneAt.protocol = name;
     if (!list) {
       entry.status = 'unavailable:bookmarks-not-captured';
       report(name);
@@ -597,6 +614,7 @@ export async function runExport(opts: ExportOptions): Promise<ExportResult> {
     const name = 'protocol:context-casts';
     const entry: SourceEntry = { kind: 'protocol', host: null, paginated: false, status: 'error:not-started', pages: 0, items: 0, lastCursorEmpty: null, files: [] };
     S[name] = entry;
+    laneAt.protocol = name;
     const own = new Set(stores.casts.map((m) => toHex(m.hash)));
     const targets = new Map<string, { fid: number; hash: Uint8Array; reasons: Set<'reply_parent' | 'reaction_target'> }>();
     const add = (c: { fid: number; hash: Uint8Array } | undefined, reason: 'reply_parent' | 'reaction_target') => {
@@ -665,42 +683,60 @@ export async function runExport(opts: ExportOptions): Promise<ExportResult> {
   // Verbatim pages go to raw/client/<dir>/page-NNNN.json. Error bodies are saved redacted (a server could
   // echo the token in an error); 200 bodies are saved verbatim and caught by the token scan if one ever
   // echoed it.
+  // An error that escapes one client source becomes that source's status, so the lane goes on to the next.
+  const sourceException = (paginated: boolean, e: unknown): SourceEntry => ({ kind: 'client', host: client.currentBase, paginated, status: `error:exception:${safeErrorText(e, 200)}`, pages: 0, items: 0, lastCursorEmpty: paginated ? false : null, files: [] });
   const objectSource = async (name: string, path: string, params: Record<string, string | number>, o: { auth?: boolean; count?: (body: unknown) => number } = {}) => {
-    const r = await client.getObject(path, params, { auth: o.auth });
-    const files: string[] = [];
-    if (r.text !== undefined) {
-      const ok = r.status === 'complete';
-      const rel = `raw/client/${name}/${ok ? 'page' : 'error'}-0001.json`;
-      writer.write(rel, ok ? r.text : redact(r.text.slice(0, 4000)));
-      files.push(rel);
+    laneAt.client = name;
+    let entry: SourceEntry;
+    let body: unknown;
+    try {
+      const r = await client.getObject(path, params, { auth: o.auth });
+      const files: string[] = [];
+      if (r.text !== undefined) {
+        const ok = r.status === 'complete';
+        const rel = `raw/client/${name}/${ok ? 'page' : 'error'}-0001.json`;
+        writer.write(rel, ok ? r.text : redact(r.text.slice(0, 4000)));
+        files.push(rel);
+      }
+      const n = r.status === 'complete' ? (o.count ? o.count(r.body) : 1) : 0;
+      const status = r.status === 'complete' && o.count && n === 0 ? 'empty' : r.status;
+      entry = { kind: 'client', host: r.base, paginated: false, status, pages: r.text !== undefined && r.status === 'complete' ? 1 : 0, items: n, lastCursorEmpty: null, files };
+      body = r.body;
+    } catch (e) {
+      entry = sourceException(false, e);
     }
-    const n = r.status === 'complete' ? (o.count ? o.count(r.body) : 1) : 0;
-    const status = r.status === 'complete' && o.count && n === 0 ? 'empty' : r.status;
-    const entry: SourceEntry = { kind: 'client', host: r.base, paginated: false, status, pages: r.text !== undefined && r.status === 'complete' ? 1 : 0, items: n, lastCursorEmpty: null, files };
     S[`client:${name}`] = entry;
     report(`client:${name}`);
-    return { entry, body: r.body };
+    return { entry, body };
   };
   const pagedSource = async (name: string, path: string, params: Record<string, string | number>, itemsKey: string, limit: number, o: { auth?: boolean; dir?: string; register?: boolean } = {}) => {
-    const r = await client.paginate(path, params, itemsKey, limit, { auth: o.auth });
-    const dir = o.dir ?? name;
-    const files = r.pages.map((p, i) => {
-      const rel = `raw/client/${dir}/page-${pad(i + 1)}.json`;
-      writer.write(rel, p);
-      return rel;
-    });
-    if (r.errorBody !== undefined && r.status !== 'complete' && r.status !== 'empty') {
-      const rel = `raw/client/${dir}/error-${pad(r.pages.length + 1)}.json`;
-      writer.write(rel, redact(r.errorBody));
-      files.push(rel);
+    laneAt.client = name;
+    let entry: SourceEntry;
+    let items: unknown[] = [];
+    try {
+      const r = await client.paginate(path, params, itemsKey, limit, { auth: o.auth });
+      const dir = o.dir ?? name;
+      const files = r.pages.map((p, i) => {
+        const rel = `raw/client/${dir}/page-${pad(i + 1)}.json`;
+        writer.write(rel, p);
+        return rel;
+      });
+      if (r.errorBody !== undefined && r.status !== 'complete' && r.status !== 'empty') {
+        const rel = `raw/client/${dir}/error-${pad(r.pages.length + 1)}.json`;
+        writer.write(rel, redact(r.errorBody));
+        files.push(rel);
+      }
+      entry = { kind: 'client', host: r.base, paginated: true, status: r.status, pages: r.pages.length, items: r.items.length, lastCursorEmpty: r.lastCursorEmpty, files, ...(r.limitUsed !== undefined ? { notes: [`limit=${r.limitUsed}`] } : {}) };
+      items = r.items;
+    } catch (e) {
+      entry = sourceException(true, e);
     }
-    const entry: SourceEntry = { kind: 'client', host: r.base, paginated: true, status: r.status, pages: r.pages.length, items: r.items.length, lastCursorEmpty: r.lastCursorEmpty, files, ...(r.limitUsed !== undefined ? { notes: [`limit=${r.limitUsed}`] } : {}) };
     if (o.register !== false) {
       S[`client:${name}`] = entry;
       report(`client:${name}`);
     }
-    clientData[name] = finished(r.status) ? r.items : null;
-    return { entry, items: r.items };
+    clientData[name] = finished(entry.status) ? items : null;
+    return { entry, items };
   };
 
   const clientLane = async () => {
@@ -721,8 +757,10 @@ export async function runExport(opts: ExportOptions): Promise<ExportResult> {
         log,
         isInterrupted: () => interrupt.requested,
       };
+      // Filled in place, so whatever was captured is kept if the lane stops partway.
+      priv = emptyPrivateData();
       try {
-        priv = await capturePrivate(helpers, (b) => bookmarksReady(b));
+        await capturePrivate(helpers, (b) => bookmarksReady(b), priv);
       } finally {
         bookmarksReady(null); // no-op when already resolved
       }
@@ -750,9 +788,12 @@ export async function runExport(opts: ExportOptions): Promise<ExportResult> {
   };
 
   const laneErrors: string[] = [];
+  const failedLanes = new Set<string>();
   const guard = (lane: string, p: Promise<void>) => p.catch((e) => {
-    laneErrors.push(redact(`${lane}: ${errMessage(e)}`));
-    log(`  ${lane} lane failed: ${redact(errMessage(e))}`);
+    failedLanes.add(lane);
+    const msg = `${lane} lane failed${laneAt[lane] ? ` (last source started: ${laneAt[lane]})` : ''}: ${safeErrorText(e)}`;
+    laneErrors.push(msg);
+    log(`  ${msg}`);
   });
   // The protocol and media lanes wait for the bookmarks; resolve them even if the client lane fails.
   await Promise.all([guard('protocol', protocolLane()), guard('client', clientLane().finally(() => bookmarksReady(null))), guard('media', mediaLane())]);
@@ -900,17 +941,28 @@ export async function runExport(opts: ExportOptions): Promise<ExportResult> {
     const t = storeTransport[store];
     return t?.kind === 'http' && (store === 'reactions' || store === 'links') ? ['AC-13 gap unavailable:http-omits-removes (served by the HTTP API, which omits removes)'] : [];
   };
+  // Sources a stopped lane never reached, for the summary.
+  const notFetched = new Set<string>();
+  const abortedIn = (sources: string[]) => {
+    const a = laneAbortStatus(sources, (s) => Boolean(S[s]), failedLanes);
+    for (const s of a?.missing ?? []) notFetched.add(s);
+    return a;
+  };
+  const abortNote = (a: ReturnType<typeof laneAbortStatus>) => (a ? [`not fetched, the ${a.lane} lane stopped first: ${a.missing.join(', ')}`] : []);
   const ds = (id: string, name: string, sources: string[], count: number | null, extra: string[] = [], primary = sources[0]): void => {
     const srcs = sources.filter((s) => S[s]);
     const bad = srcs.find((s) => /^(error|interrupted)/.test(S[s].status));
     const p = S[primary];
+    const aborted = abortedIn(sources);
     let status: string;
-    if (bad) status = S[bad].status.startsWith('interrupted') ? 'interrupted' : `error:${bad}`;
+    if (bad && S[bad].status.startsWith('interrupted')) status = 'interrupted';
+    else if (aborted) status = aborted.status;
+    else if (bad) status = `error:${bad}`;
     else if (!p) status = 'error:primary-source-missing';
     else if (p.status.startsWith('unavailable')) status = p.status;
     else status = count ? 'complete' : 'empty';
     const paged = srcs.filter((s) => S[s].paginated);
-    const notes = [...extra, ...srcs.filter((s) => s !== primary && S[s].status.startsWith('unavailable')).map((s) => `${s} ${S[s].status}`)];
+    const notes = [...extra, ...abortNote(aborted), ...srcs.filter((s) => s !== primary && S[s].status.startsWith('unavailable')).map((s) => `${s} ${S[s].status}`)];
     manifest.datasets[id] = { name, status, count, sources: srcs, lastCursorEmpty: paged.length ? paged.every((s) => S[s].lastCursorEmpty === true) : null, notes };
   };
   const notRequested = (id: string, name: string) => (manifest.datasets[id] = { name, status: NOT_REQUESTED, count: null, sources: [], lastCursorEmpty: null, notes: ['private data: run with --private'] });
@@ -921,20 +973,24 @@ export async function runExport(opts: ExportOptions): Promise<ExportResult> {
     const interrupted = st.find(([, x]) => x.startsWith('interrupted'));
     const bad = st.find(([, x]) => x.startsWith('error'));
     const unav = st.filter(([, x]) => x.startsWith('unavailable'));
+    const aborted = abortedIn(sources);
     let status: string;
     if (interrupted) status = 'interrupted';
+    else if (aborted) status = aborted.status;
     else if (bad) status = `error:${bad[0]}`;
     else if (unav.length === st.length) status = unav[0][1];
     else if (unav.length) status = `error:partial:${unav.map(([n, x]) => `${n}=${x}`).join(',')}`;
     else status = count ? 'complete' : 'empty';
     const srcs = sources.filter((s) => S[s]);
     const paged = srcs.filter((s) => S[s].paginated);
-    manifest.datasets[id] = { name, status, count, sources: srcs, lastCursorEmpty: paged.length ? paged.every((s) => S[s].lastCursorEmpty === true) : null, notes: extra };
+    manifest.datasets[id] = { name, status, count, sources: srcs, lastCursorEmpty: paged.length ? paged.every((s) => S[s].lastCursorEmpty === true) : null, notes: [...extra, ...abortNote(aborted)] };
   };
 
   ds('D1', 'following', ['protocol:links', 'client:following', 'protocol:link-compact-state'], follows.size, storeStatusNote('links'));
   ds('D2', 'followers', ['protocol:followers', 'client:followers'], followersP.size);
-  if (pd) ds('D3', 'bookmarks', ['client:bookmarks', 'protocol:bookmarked-casts'], bookmarkRecords.length, [S['protocol:bookmarked-casts']?.notes?.[0] ?? ''].filter(Boolean));
+  // The private datasets follow --private, not what was captured: a --private run whose client lane
+  // stopped reports errors, never "not requested".
+  if (opts.private) ds('D3', 'bookmarks', ['client:bookmarks', 'protocol:bookmarked-casts'], bookmarkRecords.length, [S['protocol:bookmarked-casts']?.notes?.[0] ?? ''].filter(Boolean));
   else notRequested('D3', 'bookmarks');
   ds('D4', 'casts', ['protocol:casts'], stores.casts.length);
   ds('D5', 'reactions', ['protocol:reactions'], stores.reactions.length, storeStatusNote('reactions'));
@@ -948,12 +1004,13 @@ export async function runExport(opts: ExportOptions): Promise<ExportResult> {
   );
   ds('D8', 'blocks', ['protocol:links', 'client:blocked-users'], blocks.length);
   ds('D9', 'channel follows', ['client:channels'], (clientData.channels ?? []).length);
-  if (pd) {
-    const messages = pd.conversations.reduce((n, c) => n + c.messages.length, 0);
-    dsAll('D10', 'direct casts', [...DM_CATEGORIES.map((c) => `client:dm-conversations-${c}`), 'client:dm-messages'], messages, [`conversations ${pd.conversations.length}; messages ${messages}`]);
-    ds('D11', 'drafts', ['client:drafts'], pd.drafts.length);
-    ds('D12', 'muted keywords, users and channels', ['client:muted-keywords', 'client:muted-users', 'client:muted-channels'], (normalized['muted-keywords']?.length ?? 0) + pd.mutedUsers.length + (pd.mutedChannels?.length ?? 0));
-    ds('D13', 'favourite mini apps', ['client:favorite-mini-apps'], pd.miniApps.length);
+  if (opts.private) {
+    const conversations = pd?.conversations ?? [];
+    const messages = conversations.reduce((n, c) => n + c.messages.length, 0);
+    dsAll('D10', 'direct casts', [...DM_CATEGORIES.map((c) => `client:dm-conversations-${c}`), 'client:dm-messages'], messages, [`conversations ${conversations.length}; messages ${messages}`]);
+    ds('D11', 'drafts', ['client:drafts'], pd?.drafts.length ?? 0);
+    ds('D12', 'muted keywords, users and channels', ['client:muted-keywords', 'client:muted-users', 'client:muted-channels'], (normalized['muted-keywords']?.length ?? 0) + (pd?.mutedUsers.length ?? 0) + (pd?.mutedChannels?.length ?? 0));
+    ds('D13', 'favourite mini apps', ['client:favorite-mini-apps'], pd?.miniApps.length ?? 0);
   } else {
     notRequested('D10', 'direct casts');
     notRequested('D11', 'drafts');
@@ -1002,12 +1059,16 @@ export async function runExport(opts: ExportOptions): Promise<ExportResult> {
 
   for (const t of transports) t.close();
 
+  const exitCode = hits.length ? 2 : manifest.interrupted ? 130 : errors.length ? 1 : 0;
   log(`Datasets: ${Object.entries(manifest.datasets).map(([id, d]) => `${id}=${d.status}`).join(' ')}`);
+  if (laneErrors.length) {
+    log(`Lane errors: ${laneErrors.join('; ')}.${notFetched.size ? ` Not fetched: ${[...notFetched].join(', ')}.` : ''}`);
+    log(`Result: ${manifest.result} (exit ${exitCode}). Re-run the export; see docs/USAGE.md.`);
+  }
   log(`Files: ${files} (+SHA256SUMS). Verify with: fcx verify "${writer.root}"`);
   if (transports.length && transports.every((t) => down.has(t))) {
     log(`Protocol data: every node failed (${transports.map((t) => t.label).join(', ')}). fcx falls back only between Farcaster's own Snapchain nodes, which answer only on ports 3383 and 3381, so a network that allows only web traffic (port 443) cannot reach them. Run again later or from another network, or see --hub in docs/USAGE.md.`);
   }
   if (secrets.length) log(`Token self-scan: ${hits.length} file(s) contain the token${hits.length ? ' -- DELETE THIS FOLDER and report it' : ''}.`);
-  const exitCode = hits.length ? 2 : manifest.interrupted ? 130 : errors.length ? 1 : 0;
   return { dir: writer.root, exitCode, manifest };
 }

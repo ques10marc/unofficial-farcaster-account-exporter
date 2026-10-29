@@ -21,6 +21,10 @@ import path from 'node:path';
 const VERSION = '0.1.0';
 const MIN_GAP_MS = 600; // /v2/following and /v2/followers allow 20 requests per 10s
 const REQUEST_TIMEOUT_MS = 30_000;
+// Network errors (no response, or a body that fails mid-read) are retried with waits of 2, 4, 8, 16, 32
+// and then 60 s: about 5 minutes in all, enough to ride out a Wi-Fi reconnect.
+const NETWORK_ATTEMPTS = 10;
+const MAX_ERROR_CHARS = 300;
 
 // ---------- args ----------
 function parseArgs(argv) {
@@ -43,6 +47,11 @@ function parseArgs(argv) {
 // ---------- token ----------
 let TOKEN = '';
 const redact = (s) => (TOKEN ? String(s).split(TOKEN).join('[REDACTED]') : String(s));
+// Redacted first, then cut, so a cut can never leave part of the token behind.
+const safeError = (e) => {
+  const s = redact(e instanceof Error ? e.message : e);
+  return s.length > MAX_ERROR_CHARS ? `${s.slice(0, MAX_ERROR_CHARS)}…` : s;
+};
 
 function normalizeToken(raw) {
   return raw
@@ -113,14 +122,19 @@ async function request(urlPath, params, { auth }) {
     if (wait > 0) await sleep(wait);
     lastRequestAt = Date.now();
     let res;
+    let text;
     try {
       res = await fetch(url, { headers, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+      // The timeout also covers the body, so a connection that dies mid-body is retried like one that
+      // never answered.
+      text = await res.text();
     } catch (e) {
-      if (attempt >= 6 || interrupted) return { status: 0, text: '', error: redact(e.message) };
-      await backoffSleep(Math.min(60_000, 2000 * 2 ** (attempt - 1)));
+      if (attempt >= NETWORK_ATTEMPTS || interrupted) return { status: 0, text: '', error: safeError(e) };
+      const ms = Math.min(60_000, 2000 * 2 ** (attempt - 1));
+      log(`    network error, retry ${attempt} in ${Math.round(ms / 1000)}s: ${safeError(e)}`);
+      await backoffSleep(ms);
       continue;
     }
-    const text = await res.text();
     if (res.status === 429 && attempt <= 12) {
       const ra = Number(res.headers.get('retry-after'));
       backoff = Number.isFinite(ra) && ra > 0 ? ra * 1000 : Math.min(15 * 60_000, Math.max(30_000, backoff * 2));

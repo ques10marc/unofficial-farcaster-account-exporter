@@ -94,3 +94,41 @@ test('rate limiter enforces 20 per 10 s and 500 per hour', async () => {
   await lim.take(); // 501st within the hour
   assert.ok(now - before > 0 && now >= 3_600_000, `hour window not enforced: now=${now}`);
 });
+
+// A 200 whose body fails partway through, as when the connection drops after the headers arrive.
+const brokenBody = (err: Error) =>
+  new Response(
+    new ReadableStream({
+      start(c) {
+        c.enqueue(new TextEncoder().encode('{"result":'));
+        c.error(err);
+      },
+    }),
+    { status: 200, headers: { 'content-type': 'application/json' } },
+  );
+const timeoutError = () => new DOMException('The operation was aborted due to timeout', 'TimeoutError');
+
+test('a body that fails mid-read is retried like a failed connection, and the retry is logged', async () => {
+  const waits: number[] = [];
+  const logs: string[] = [];
+  const responses = [brokenBody(timeoutError()), json({ result: { users: [{ fid: 1 }] } })];
+  const api = new ClientApi({ fetchImpl: (async () => responses.shift()!) as typeof fetch, limiter: noLimit(), wait: async (ms) => void waits.push(ms), log: (s) => logs.push(s) });
+  const r = await api.paginate('/v2/followers', { fid: 1 }, 'users', 50);
+  assert.equal(r.status, 'complete');
+  assert.equal(r.items.length, 1);
+  assert.deepEqual(waits, [2000]);
+  assert.deepEqual(logs, ['    network error, retry 1 in 2s: The operation was aborted due to timeout']);
+});
+
+test('a body that keeps failing gives up after 10 attempts with status 0, without throwing', async () => {
+  let calls = 0;
+  const waits: number[] = [];
+  const api = new ClientApi({ fetchImpl: (async () => (calls++, brokenBody(timeoutError()))) as typeof fetch, limiter: noLimit(), wait: async (ms) => void waits.push(ms) });
+  const r = await api.get('/v2/followers', { fid: 1 });
+  assert.equal(r.status, 0);
+  assert.equal(r.error, 'The operation was aborted due to timeout');
+  assert.equal(calls, 10);
+  assert.deepEqual(waits, [2000, 4000, 8000, 16_000, 32_000, 60_000, 60_000, 60_000, 60_000]);
+  const p = await api.paginate('/v2/followers', { fid: 1 }, 'users', 50);
+  assert.equal(p.status, 'error:network:The operation was aborted due to timeout');
+});

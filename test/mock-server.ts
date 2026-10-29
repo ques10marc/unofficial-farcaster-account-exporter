@@ -39,6 +39,9 @@ export interface MockOptions {
   loopCursor?: string[];
   // Private paths that refuse even the right token with this status (an endpoint the account cannot use).
   rejectPaths?: Record<string, number>;
+  // Paths (public or private) whose first N responses send the headers and half the body, then drop the
+  // connection: a network that fails mid-response. Infinity drops every response.
+  dropBody?: Record<string, number>;
 }
 
 const PRIVATE_PATHS = new Set(['/v2/me', '/v2/bookmarked-casts', '/v2/direct-cast-conversation-list', '/v2/direct-cast-conversation-messages', '/v2/draft-casts', '/v2/get-muted-keywords', '/v2/get-muted-users', '/v2/get-muted-channels', '/v1/favorite-frames']);
@@ -63,6 +66,7 @@ export async function startMock(opts: MockOptions): Promise<{ url: string; reque
   const store = opts.publicStore ?? (fixture('fid11-client.json') as ClientStore);
   const requests: MockRequest[] = [];
   const served429 = new Set<string>();
+  const dropped = new Map<string, number>();
 
   const server = http.createServer((req, res) => {
     const u = new URL(req.url ?? '/', 'http://127.0.0.1');
@@ -74,8 +78,16 @@ export async function startMock(opts: MockOptions): Promise<{ url: string; reque
     const auth: MockRequest['auth'] = header === undefined ? 'none' : header === `Bearer ${opts.token}` ? 'valid' : 'invalid';
     const send = (status: number, body: unknown, headers: Record<string, string> = {}) => {
       requests.push({ prefix, path, query, auth, status });
+      const text = typeof body === 'string' ? body : JSON.stringify(body);
+      const n = dropped.get(path) ?? 0;
+      if (n < (opts.dropBody?.[path] ?? 0)) {
+        dropped.set(path, n + 1);
+        res.writeHead(status, { 'content-type': 'application/json', 'content-length': String(Buffer.byteLength(text)), ...headers });
+        res.write(text.slice(0, Math.floor(text.length / 2)), () => res.destroy());
+        return;
+      }
       res.writeHead(status, { 'content-type': 'application/json', ...headers });
-      res.end(typeof body === 'string' ? body : JSON.stringify(body));
+      res.end(text);
     };
     if (req.method !== 'GET') return send(405, { errors: [{ message: 'GET only' }] });
 

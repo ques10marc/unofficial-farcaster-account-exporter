@@ -16,7 +16,8 @@ import {
   UserNameProof,
   onChainEventTypeToJSON,
 } from '@farcaster/core';
-import { errMessage, fromB64, fromHex, toB64, toHex, USER_AGENT } from '../util.ts';
+import { safeErrorText } from '../secrets.ts';
+import { fromB64, fromHex, toB64, toHex, USER_AGENT } from '../util.ts';
 import { isAllNullShardToken } from './paginate.ts';
 import { type EventPage, type MessagePage, type ProtocolTransport, type ShardBlock, type SignerPage, type Store, TransportError, unsupported } from './types.ts';
 
@@ -119,12 +120,14 @@ export class HttpTransport implements ProtocolTransport {
     const url = new URL(`${this.base}/v1/${path}`);
     for (const [k, v] of Object.entries(params)) if (v !== undefined) url.searchParams.set(k, String(v));
     let res: Response;
+    let raw: string;
     try {
       res = await this.fetchImpl(url, { headers: { accept: 'application/json', 'user-agent': USER_AGENT }, signal: AbortSignal.timeout(TIMEOUT_MS) });
+      // The timeout also covers the body: a body that fails mid-read is a retryable network error too.
+      raw = await res.text();
     } catch (e) {
-      throw new TransportError(`${this.label} ${path}: ${errMessage(e)}`, { retryable: true, code: 'network' });
+      throw new TransportError(`${this.label} ${path}: ${safeErrorText(e, 200)}`, { retryable: true, code: 'network' });
     }
-    const raw = await res.text();
     if (res.status !== 200) {
       const notFound = res.status === 404 || /NotFound|not found/i.test(raw);
       throw new TransportError(`${this.label} ${path}: HTTP ${res.status} ${raw.slice(0, 200)}`, {

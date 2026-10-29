@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { CastType, FarcasterNetwork, makeCastAdd, Message, NobleEd25519Signer } from '@farcaster/core';
-import { ClientApi } from '../src/client.ts';
+import { ClientApi, type ClientOptions } from '../src/client.ts';
 import { type ExportOptions, runExport } from '../src/export.ts';
 import { TransportError } from '../src/protocol/types.ts';
 import { FARCASTER_EPOCH_MS, RateLimiter, toB64, toHex } from '../src/util.ts';
@@ -50,7 +50,9 @@ export interface MediaCall {
   headers: Record<string, string>;
 }
 
-export async function mockPrivateExport(o: { token?: string; mock?: Partial<MockOptions>; out?: string; export?: Partial<ExportOptions>; onMedia?: (outDir: string) => void } = {}) {
+// makeClient: builds the client from the harness's options (pointed at the mock), so a test can wrap its
+// fetch or subclass it.
+export async function mockPrivateExport(o: { token?: string; mock?: Partial<MockOptions>; out?: string; export?: Partial<ExportOptions>; onMedia?: (outDir: string) => void; makeClient?: (opts: ClientOptions) => ClientApi } = {}) {
   const token = o.token ?? `fcx-sentinel-${randomUUID()}`;
   // The lookup-only cast is appended last, so the other bookmarks keep their positions.
   const lookupOnly = await lookupOnlyCast();
@@ -60,7 +62,7 @@ export async function mockPrivateExport(o: { token?: string; mock?: Partial<Mock
   const logs: string[] = [];
   const mediaCalls: MediaCall[] = [];
   const noWait = async () => {};
-  const client = new ClientApi({
+  const clientOptions: ClientOptions = {
     token,
     bases: [`${mock.url}/primary`, `${mock.url}/~api`],
     explicitBase: false,
@@ -68,7 +70,8 @@ export async function mockPrivateExport(o: { token?: string; mock?: Partial<Mock
     privateLimiter: new RateLimiter({ windows: [] }),
     wait: noWait,
     log: (s) => logs.push(s),
-  });
+  };
+  const client = o.makeClient ? o.makeClient(clientOptions) : new ClientApi(clientOptions);
   let first = true;
   const mediaFetch = (async (input: string | URL | Request, init?: RequestInit) => {
     const u = new URL(input instanceof Request ? input.url : input.toString());

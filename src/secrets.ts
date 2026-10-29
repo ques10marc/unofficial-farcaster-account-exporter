@@ -131,6 +131,13 @@ export function redactRegistered(s: unknown): string {
   return makeRedactor([...registered, tokenFromEnv()])(s);
 }
 
+// An error message fit for a log line or a manifest status: redacted for every registered secret first,
+// then cut to max characters, so a cut can never leave part of a token behind.
+export function safeErrorText(e: unknown, max = 300): string {
+  const s = redactRegistered(e instanceof Error ? e.message : e);
+  return s.length > max ? `${s.slice(0, max)}…` : s;
+}
+
 // Returns the relative paths of files containing any variant of the secret. Reads bytes, so it also
 // covers binary files (raw protobuf, media).
 export function scanTreeForSecret(root: string, secret: string): { filesScanned: number; hits: string[] } {

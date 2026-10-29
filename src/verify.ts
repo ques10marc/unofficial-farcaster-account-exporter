@@ -94,6 +94,7 @@ export async function verifyExport(dir: string, opts: { env?: NodeJS.ProcessEnv;
       `status counts: ${JSON.stringify(counts)}; error: ${bad.length}${bad.length ? ' (' + bad.map((id) => `${id}=${m.datasets[id].status}`).join(', ') + ')' : ''}`,
       `unavailable: ${unavailable.join(', ') || 'none'}`,
       `manifest result: ${m.result}`,
+      `lane errors: ${m.laneErrors?.length ? m.laneErrors.join('; ') : 'none'}`,
     ]);
   }
 

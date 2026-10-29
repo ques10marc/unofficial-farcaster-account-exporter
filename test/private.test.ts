@@ -11,7 +11,7 @@ import { test } from 'node:test';
 import { Message } from '@farcaster/core';
 import { ClientApi } from '../src/client.ts';
 import { parseCsv } from '../src/csv.ts';
-import { AuthCheckError } from '../src/export.ts';
+import { AuthCheckError, laneAbortStatus } from '../src/export.ts';
 import { findInExport } from '../src/find.ts';
 import { checkTokenShape, normalizeToken, readSessionToken, redactRegistered, scanTreeForSecret, tokenHostAllowed } from '../src/secrets.ts';
 import { RateLimiter, toHex } from '../src/util.ts';
@@ -359,6 +359,72 @@ test('CLI: auth-check and export --private against the mock, with the token only
   } finally {
     await mock.close();
   }
+});
+
+// ---------- a network that fails mid-response, and a lane that stops ----------
+
+test('a client body that fails mid-read is retried: the run completes with nothing lost', async () => {
+  const r = await mockPrivateExport({ mock: { dropBody: { '/v2/direct-cast-conversation-messages': 1 } } });
+  const m = r.result.manifest;
+  assert.equal(r.result.exitCode, 0, r.logs.join('\n'));
+  assert.equal(m.datasets.D10.status, 'complete');
+  assert.ok(r.logs.some((l) => l.startsWith('    network error, retry 1 in 2s: ')), 'retry logged');
+  assert.equal(m.laneErrors, undefined);
+});
+
+test('client sources that keep failing are errors: D1, D2, D6 and D8 never look complete, and the private data is kept', async () => {
+  const dropBody = Object.fromEntries(['/v2/following', '/v2/followers', '/fc/blocked-users', '/v2/user-by-fid'].map((p) => [p, Infinity]));
+  const r = await mockPrivateExport({ mock: { dropBody } });
+  const m = r.result.manifest;
+  assert.equal(r.result.exitCode, 1);
+  for (const [id, source] of [['D1', 'following'], ['D2', 'followers'], ['D6', 'profile-before'], ['D8', 'blocked-users']]) {
+    assert.equal(m.datasets[id].status, `error:client:${source}`, id);
+    assert.match(m.sources[`client:${source}`].status, /^error:network:/, source);
+  }
+  assert.equal(m.datasets.D3.status, 'complete');
+  for (const id of ['D3', 'D10', 'D11', 'D12', 'D13']) assert.notEqual(m.datasets[id].status, 'unavailable:private-not-requested', id);
+  assert.ok(fs.existsSync(path.join(r.result.dir, 'normalized/bookmarks.json')));
+  assert.ok(fs.existsSync(path.join(r.result.dir, 'csv/bookmarks.csv')));
+  assert.equal(m.laneErrors, undefined, 'a failing source must not stop the lane');
+});
+
+test('a client lane that stops after the DM lists: the datasets it never reached are error:client-lane-aborted', async () => {
+  const logs: string[] = [];
+  let thrown = false;
+  // An error outside any one source (here, from the log sink) stops the whole lane.
+  const log = (s: string) => {
+    logs.push(s);
+    if (!thrown && s.includes('client:dm-conversations-void')) {
+      thrown = true;
+      throw new Error('log sink failed');
+    }
+  };
+  const r = await mockPrivateExport({ export: { log } });
+  const m = r.result.manifest;
+  assert.equal(r.result.exitCode, 1);
+  for (const id of ['D1', 'D2', 'D6', 'D8', 'D9', 'D10', 'D11', 'D12', 'D13']) assert.equal(m.datasets[id].status, 'error:client-lane-aborted', id);
+  assert.match(m.datasets.D10.notes.join('\n'), /not fetched, the client lane stopped first: client:dm-messages/);
+  // Bookmarks were fetched before the lane stopped: they are kept and written out.
+  assert.equal(m.datasets.D3.status, 'complete');
+  assert.ok(fs.existsSync(path.join(r.result.dir, 'normalized/bookmarks.json')));
+  assert.ok(fs.existsSync(path.join(r.result.dir, 'csv/bookmarks.csv')));
+  assert.deepEqual(m.laneErrors, ['client lane failed (last source started: dm-conversations-void): log sink failed']);
+  const lane = logs.find((l) => l.startsWith('Lane errors: '));
+  assert.ok(lane?.startsWith('Lane errors: client lane failed (last source started: dm-conversations-void): log sink failed. Not fetched: client:following,'), lane);
+  assert.match(lane!, /client:dm-messages/);
+  assert.ok(logs.includes('Result: errors (exit 1). Re-run the export; see docs/USAGE.md.'));
+  const v = await verifyExport(r.result.dir, { env: { FC_SESSION_TOKEN: r.token } });
+  const ac01 = v.checks.find((c) => c.id === 'AC-01')!;
+  assert.equal(ac01.verdict, 'FAIL');
+  assert.ok(ac01.detail.includes('lane errors: client lane failed (last source started: dm-conversations-void): log sink failed'));
+});
+
+test('laneAbortStatus: a source missing because its lane stopped makes the dataset error:<lane>-lane-aborted', () => {
+  const has = (s: string) => s === 'protocol:links';
+  assert.deepEqual(laneAbortStatus(['protocol:links', 'client:following'], has, new Set(['client'])), { status: 'error:client-lane-aborted', lane: 'client', missing: ['client:following'] });
+  assert.equal(laneAbortStatus(['protocol:links', 'client:following'], has, new Set()), null, 'no lane failed');
+  assert.equal(laneAbortStatus(['protocol:links', 'client:following'], has, new Set(['protocol'])), null, 'the missing source is in another lane');
+  assert.equal(laneAbortStatus(['protocol:casts'], () => false, new Set(['protocol']))?.status, 'error:protocol-lane-aborted');
 });
 
 test('the repo contains no sentinel after the private runs', () => {

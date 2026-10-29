@@ -72,8 +72,10 @@ const done = (s: string) => s === 'complete' || s === 'empty';
 const pad = (n: number) => String(n).padStart(4, '0');
 export const safeName = (s: string): string => s.replace(/[^A-Za-z0-9._-]/g, '_');
 
-export async function capturePrivate(h: CaptureHelpers, onBookmarks: (bookmarks: Record<string, unknown>[]) => void): Promise<PrivateData> {
-  const data: PrivateData = { bookmarks: [], conversations: [], drafts: [], mutedKeywords: null, mutedUsers: [], mutedChannels: null, miniApps: [] };
+export const emptyPrivateData = (): PrivateData => ({ bookmarks: [], conversations: [], drafts: [], mutedKeywords: null, mutedUsers: [], mutedChannels: null, miniApps: [] });
+
+// Fills data in place, so a caller keeps whatever was captured even if this throws partway.
+export async function capturePrivate(h: CaptureHelpers, onBookmarks: (bookmarks: Record<string, unknown>[]) => void, data: PrivateData = emptyPrivateData()): Promise<PrivateData> {
   try {
     // Bookmarks first: they exist only on the app's servers and are the highest-priority private data.
     const b = await h.paged({ name: 'bookmarks', path: '/v2/bookmarked-casts', params: {}, itemsKey: 'bookmarks', limit: 100 });

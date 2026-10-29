@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { collectPages, isAllNullShardToken, PaginationError, withRetry } from '../src/protocol/paginate.ts';
+import { HttpTransport } from '../src/protocol/http.ts';
 import { TransportError } from '../src/protocol/types.ts';
 
 const bytes = (s: string) => new Uint8Array(Buffer.from(s, 'latin1'));
@@ -68,4 +69,29 @@ test('retryable errors are retried with backoff; others are not', async () => {
     throw new TransportError('bad', { retryable: false, code: 'grpc_3' });
   }));
   assert.equal(m, 1);
+});
+
+test('HTTP API: a body that fails mid-read is a retryable network error, so withRetry tries again', async () => {
+  let calls = 0;
+  const fetchImpl = (async () => {
+    if (++calls === 1) {
+      const body = new ReadableStream({
+        start(c) {
+          c.enqueue(new TextEncoder().encode('{"proofs":'));
+          c.error(new DOMException('The operation was aborted due to timeout', 'TimeoutError'));
+        },
+      });
+      return new Response(body, { status: 200 });
+    }
+    return new Response(JSON.stringify({ proofs: [] }), { status: 200 });
+  }) as typeof fetch;
+  const t = new HttpTransport('https://snap.example:3381', fetchImpl);
+  const retries: unknown[] = [];
+  const r = await withRetry(() => t.usernameProofs(1), { wait: async () => {}, onRetry: (e) => retries.push(e) });
+  assert.equal(r.proofs.length, 0);
+  assert.equal(calls, 2);
+  assert.equal(retries.length, 1);
+  const e = retries[0] as TransportError;
+  assert.ok(e instanceof TransportError && e.retryable && e.code === 'network');
+  assert.match(e.message, /userNameProofsByFid: The operation was aborted due to timeout$/);
 });
