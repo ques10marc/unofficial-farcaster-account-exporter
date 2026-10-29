@@ -427,6 +427,22 @@ test('laneAbortStatus: a source missing because its lane stopped makes the datas
   assert.equal(laneAbortStatus(['protocol:casts'], () => false, new Set(['protocol']))?.status, 'error:protocol-lane-aborted');
 });
 
+test('an outage during the DM messages: after the first conversation uses up its retries, the rest try once each', async () => {
+  const dmPath = '/v2/direct-cast-conversation-messages';
+  const r = await mockPrivateExport({ mock: { dropBody: { [dmPath]: Infinity } } });
+  const m = r.result.manifest;
+  const dm = r.mock.requests.filter((q) => q.path === dmPath);
+  const n = new Set(dm.map((q) => q.query.conversationId)).size;
+  assert.ok(n > 1, `conversations requested: ${n}`);
+  // The first conversation: 10 attempts on the primary host, then 1 on the fallback host. Each later one: 1 + 1.
+  assert.equal(dm.length, 2 * n + 9);
+  assert.equal(r.logs.filter((l) => l.includes('network still failing after 10 attempts')).length, 1);
+  assert.ok(r.logs.includes('    network back: requests get full retries again'), 'the drafts request got through');
+  assert.match(m.datasets.D10.status, /^error:/);
+  assert.equal(m.sources['client:drafts'].status, 'complete');
+  assert.equal(r.result.exitCode, 1);
+});
+
 test('the repo contains no sentinel after the private runs', () => {
   const skip = new Set(['node_modules', '.git']);
   const walk = (d: string): string[] =>

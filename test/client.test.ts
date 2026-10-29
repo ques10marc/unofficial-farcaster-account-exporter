@@ -132,3 +132,40 @@ test('a body that keeps failing gives up after 10 attempts with status 0, withou
   const p = await api.paginate('/v2/followers', { fid: 1 }, 'users', 50);
   assert.equal(p.status, 'error:network:The operation was aborted due to timeout');
 });
+
+test('after one request uses up its network retries, later requests try once each', async () => {
+  let calls = 0;
+  const waits: number[] = [];
+  const logs: string[] = [];
+  const api = new ClientApi({ fetchImpl: (async () => (calls++, brokenBody(timeoutError()))) as typeof fetch, limiter: noLimit(), wait: async (ms) => void waits.push(ms), log: (s) => logs.push(s) });
+  assert.equal((await api.get('/v2/followers', { fid: 1 })).status, 0);
+  assert.equal(calls, 10);
+  for (const path of ['/v2/following', '/v2/channels']) {
+    const r = await api.get(path, { fid: 1 });
+    assert.equal(r.status, 0);
+    assert.equal(r.error, 'The operation was aborted due to timeout');
+  }
+  assert.equal(calls, 12, 'one call each once the network is down');
+  assert.equal(waits.length, 9, 'no waits once the network is down');
+  assert.deepEqual(logs.filter((l) => l.includes('network still failing')), ['    network still failing after 10 attempts; later requests try once each until one gets through']);
+});
+
+test('once any response gets through, requests get their full network retries again', async () => {
+  let calls = 0;
+  let up = false;
+  const waits: number[] = [];
+  const logs: string[] = [];
+  const fetchImpl = (async () => (calls++, up ? json({ errors: [] }, 404) : brokenBody(timeoutError()))) as typeof fetch;
+  const api = new ClientApi({ fetchImpl, limiter: noLimit(), wait: async (ms) => void waits.push(ms), log: (s) => logs.push(s) });
+  await api.get('/v2/followers', { fid: 1 }); // uses up its 10 attempts
+  up = true;
+  // A 404 is still a response: the network is back.
+  assert.equal((await api.get('/v2/following', { fid: 1 })).status, 404);
+  assert.ok(logs.includes('    network back: requests get full retries again'), logs.join('\n'));
+  up = false;
+  calls = 0;
+  waits.length = 0;
+  assert.equal((await api.get('/v2/channels', { fid: 1 })).status, 0);
+  assert.equal(calls, 10);
+  assert.deepEqual(waits, [2000, 4000, 8000, 16_000, 32_000, 60_000, 60_000, 60_000, 60_000]);
+});

@@ -74,6 +74,9 @@ export class ClientApi {
   private readonly wait: (ms: number) => Promise<void>;
   private readonly log: (s: string) => void;
   requests = 0;
+  // Set once a request has used up its network retries. Later requests then try once each until a
+  // response gets through, so a long outage costs one full set of retries, not one per request.
+  private networkDown = false;
 
   constructor(opts: ClientOptions = {}) {
     this.bases = opts.bases ?? CLIENT_BASES;
@@ -121,11 +124,22 @@ export class ClientApi {
         text = await res.text();
       } catch (e) {
         // The error ends up in a source's status in the manifest, so it gets the status length cap.
-        if (attempt >= NETWORK_ATTEMPTS || interrupt.requested) return { status: 0, text: '', url: url.toString(), error: safeErrorText(e, 200) };
+        if (attempt >= (this.networkDown ? 1 : NETWORK_ATTEMPTS) || interrupt.requested) {
+          if (!this.networkDown && !interrupt.requested) {
+            this.networkDown = true;
+            this.log(`    network still failing after ${NETWORK_ATTEMPTS} attempts; later requests try once each until one gets through`);
+          }
+          return { status: 0, text: '', url: url.toString(), error: safeErrorText(e, 200) };
+        }
         const ms = Math.min(60_000, 2000 * 2 ** (attempt - 1));
         this.log(`    network error, retry ${attempt} in ${Math.round(ms / 1000)}s: ${safeErrorText(e)}`);
         await this.wait(ms);
         continue;
+      }
+      // Any response, whatever its status, shows the network is back.
+      if (this.networkDown) {
+        this.networkDown = false;
+        this.log('    network back: requests get full retries again');
       }
       if (res.status === 429 && attempt <= 12 && !interrupt.requested) {
         const ra = Number(res.headers.get('retry-after'));
