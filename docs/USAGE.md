@@ -187,6 +187,7 @@ Other commands:
 - **`node bin/fcx.js auth-check --fid N [--base URL]`** checks the session token against `/v2/me` and writes nothing.
 - **`node bin/fcx.js find DIR <text | 0xhash-prefix | fid | username>`** searches an export, for spot checks.
 - **`node scripts/import-check.mjs DIR`** rebuilds following, followers and bookmarks (with cast text) from the export alone, with network access blocked. On macOS, `sandbox-exec -p '(version 1)(allow default)(deny network*)' node scripts/import-check.mjs DIR` has the operating system enforce that.
+- **`node scripts/print-account-control.mjs DIR`** prints the custody and recovery address on record for the exported account, read offline from its on-chain ID-registry events. It shows each address and its history, marks the recovery address's operator as unknown, and explains how to check who controls that address (its `owner()`, and a Safe multisig's owners) on a block explorer. It makes no network calls and writes nothing.
 - **`npm test`** runs the unit and integration tests, on recorded fixtures and a local mock server. It uses no network and no real token.
 
 ## Output
