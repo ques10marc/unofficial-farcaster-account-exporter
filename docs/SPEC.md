@@ -15,7 +15,7 @@ Options and exit codes are in [USAGE.md](USAGE.md).
 
 ## Datasets
 
-Every export's `manifest.json` gives each dataset a status: `complete`, `empty`, or `unavailable:<reason>`. Without `--private`, D3 and D10–D13 are `unavailable:private-not-requested`.
+Every export's `manifest.json` gives each dataset a status: `complete`, `empty`, or `unavailable:<reason>`. A dataset can also be `error:<reason>`; when a lane stops early, the datasets it never reached are `error:<lane>-lane-aborted`. Without `--private`, D3 and D10–D13 are `unavailable:private-not-requested`.
 
 | ID | Dataset | Manifest sources | Needs `--private` |
 |---|---|---|---|

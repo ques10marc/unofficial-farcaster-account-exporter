@@ -211,6 +211,8 @@ Other commands:
 | 64 | Usage error |
 | 130 | Interrupted |
 
+If the summary shows `Lane errors:`, one of the three lanes (protocol, client API or media) stopped early: the datasets it never reached are `error:<lane>-lane-aborted` and the run exits 1, so run the export again.
+
 ## What to share when you report a result
 
 - the whole `verify` output, which holds statuses and counts only: DM conversations are referred to by number, never by ID or content;
