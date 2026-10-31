@@ -38,10 +38,10 @@ import { ReplayTransport } from './replay.ts';
 const FID = 11;
 const seed = (s: string) => createHash('sha256').update(s).digest();
 const custodyKey = (name: string) => new ViemLocalEip712Signer(privateKeyToAccount(`0x${seed(name).toString('hex')}`));
-const CUSTODY = custodyKey('fcx test custody key');
-const OTHER_CUSTODY = custodyKey('fcx test other custody key');
-const CUSTODY_ADDRESS = fromHex(privateKeyToAccount(`0x${seed('fcx test custody key').toString('hex')}`).address);
-const GASLESS = new NobleEd25519Signer(new Uint8Array(seed('fcx test gasless signer')));
+const CUSTODY = custodyKey('castsnap test custody key');
+const OTHER_CUSTODY = custodyKey('castsnap test other custody key');
+const CUSTODY_ADDRESS = fromHex(privateKeyToAccount(`0x${seed('castsnap test custody key').toString('hex')}`).address);
+const GASLESS = new NobleEd25519Signer(new Uint8Array(seed('castsnap test gasless signer')));
 const ALL_SCOPES = [MessageType.CAST_ADD, MessageType.CAST_REMOVE, MessageType.REACTION_ADD, MessageType.REACTION_REMOVE, MessageType.LINK_ADD, MessageType.LINK_REMOVE];
 const DAY = 86_400;
 

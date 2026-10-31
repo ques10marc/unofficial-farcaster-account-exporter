@@ -1,4 +1,4 @@
-// fcx find DIR <query>: case-insensitive search over an export's normalized data, for manual spot
+// castsnap find DIR <query>: case-insensitive search over an export's normalized data, for manual spot
 // checks (AC-12 bookmarks, AC-18 direct casts). Matches cast and message text, hashes (prefix), fids
 // (exact) and usernames. Output goes to the user's own terminal only.
 

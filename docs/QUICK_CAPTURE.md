@@ -15,7 +15,7 @@
 
 **What it doesn't capture:**
 - **Media files.** Image and video bytes aren't downloaded; the saved cast JSON keeps their URLs.
-- **Your signed protocol messages** (casts, reactions, follows). The full exporter, `fcx`, fetches those; see [USAGE.md](USAGE.md).
+- **Your signed protocol messages** (casts, reactions, follows). The full exporter, `castsnap`, fetches those; see [USAGE.md](USAGE.md).
 
 Your follows and followers are also on the protocol, so they are at less risk than bookmarks and DMs.
 

@@ -1,4 +1,4 @@
-// fcx verify DIR: offline checks of a finished export against the automatable acceptance criteria.
+// castsnap verify DIR: offline checks of a finished export against the automatable acceptance criteria.
 // Reads only the export directory; makes no network requests. The full message validation is run
 // with no RPC clients, because @farcaster/core's default would call public RPC nodes for
 // contract-wallet verification claims.
@@ -53,7 +53,7 @@ const DM_CATEGORIES = ['default', 'archived', 'request', 'void'];
 const HEX_HASH = /^0x[0-9a-f]+$/;
 const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
 
-// Verbatim client pages of one source directory, in page order, independent of fcx's normalization.
+// Verbatim client pages of one source directory, in page order, independent of castsnap's normalization.
 function rawPages(dir: string): { files: string[]; bodies: { result?: Record<string, unknown>; next?: { cursor?: string } }[]; errors: string[] } {
   if (!fs.existsSync(dir)) return { files: [], bodies: [], errors: [] };
   const names = fs.readdirSync(dir).sort();
@@ -529,7 +529,7 @@ export async function verifyExport(dir: string, opts: { env?: NodeJS.ProcessEnv;
       '(c) manual: not evaluated by verify (see "Manual checks" below)',
     ], [
       'AC-12(c) bookmarks, 5 of 5: in the app, open your bookmarks and copy a distinctive phrase from the newest, the oldest and 3 random bookmarks.',
-      `  For each phrase run: node bin/fcx.js find "${root}" "PHRASE"   PASS when all 5 print a "bookmarks" line.`,
+      `  For each phrase run: node bin/castsnap.js find "${root}" "PHRASE"   PASS when all 5 print a "bookmarks" line.`,
     ]);
   }
 
@@ -575,7 +575,7 @@ export async function verifyExport(dir: string, opts: { env?: NodeJS.ProcessEnv;
     detail.push(`messages in raw pages ${rawMessages}; normalized ${msgs.length}; conversations whose counts differ ${countMismatch}`);
     add('AC-18', ok ? 'PASS' : 'FAIL', [...detail, 'spot check: manual, not evaluated by verify (see "Manual checks" below)'], [
       'AC-18 direct casts, 3 of 3: pick 3 conversations in the app, scroll each to its oldest message, and copy a phrase from it.',
-      `  For each phrase run: node bin/fcx.js find "${root}" "PHRASE"   PASS when all 3 print a "dm-messages" line.`,
+      `  For each phrase run: node bin/castsnap.js find "${root}" "PHRASE"   PASS when all 3 print a "dm-messages" line.`,
     ]);
   }
 
@@ -617,7 +617,7 @@ export async function verifyExport(dir: string, opts: { env?: NodeJS.ProcessEnv;
 }
 
 export function formatChecks(dir: string, checks: Check[]): string {
-  const lines = [`fcx verify ${dir}`];
+  const lines = [`castsnap verify ${dir}`];
   for (const c of checks) {
     lines.push(`  ${c.id} ${c.verdict.padEnd(4)} ${c.detail[0] ?? ''}`);
     for (const d of c.detail.slice(1)) lines.push(`             ${d}`);

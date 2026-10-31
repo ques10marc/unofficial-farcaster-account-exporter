@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Offline import check (SPEC AC-15): rebuilds following, followers and (on --private runs) bookmarks
 // with cast text from an export directory alone, the way another tool importing the export would.
-// Independent of fcx's own code: only node builtins and @farcaster/core (to decode raw protobuf).
+// Independent of castsnap's own code: only node builtins and @farcaster/core (to decode raw protobuf).
 // Any network attempt throws; run it under `sandbox-exec -p '(version 1)(allow default)(deny network*)'`
 // on macOS to have the OS enforce that too.
 //

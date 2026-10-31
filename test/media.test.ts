@@ -21,7 +21,7 @@ test('private and loopback addresses are recognised', () => {
 });
 
 test('media: images stored by sha256, pages and 404s get a status only, private targets refused', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fcx-media-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'castsnap-media-'));
   const w = ExportWriter.create(dir, 1);
   const requested: string[] = [];
   const fetchImpl = (async (u: URL) => {
@@ -67,7 +67,7 @@ test('media: images stored by sha256, pages and 404s get a status only, private 
 });
 
 test('media: an IPv4 address written as IPv6 in a URL is refused without a request', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fcx-media-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'castsnap-media-'));
   const w = ExportWriter.create(dir, 1);
   const requested: string[] = [];
   const fetchImpl = (async (u: URL) => {
@@ -81,7 +81,7 @@ test('media: an IPv4 address written as IPv6 in a URL is refused without a reque
 });
 
 test('media: once stored media reach the total cap, the remaining URLs are skipped without a request', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fcx-media-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'castsnap-media-'));
   const w = ExportWriter.create(dir, 1);
   const requested: string[] = [];
   // Distinct bodies, so each one is stored and counted: the PNG header plus the 6-byte path.
@@ -125,7 +125,7 @@ test('media: the connection goes only to an address that passed the check (DNS r
   // a second, unchecked lookup would connect.
   const answers = [['93.184.216.34']];
   const resolve = async () => answers.shift() ?? ['127.0.0.1'];
-  const w = ExportWriter.create(fs.mkdtempSync(path.join(os.tmpdir(), 'fcx-media-')), 1);
+  const w = ExportWriter.create(fs.mkdtempSync(path.join(os.tmpdir(), 'castsnap-media-')), 1);
   try {
     const { rows } = await downloadMedia([{ url: `http://localhost.:${srv.port}/x.png`, castHash: '0x01' }], w, { resolve, wait: async () => {} });
     assert.match(rows[0].error ?? '', /refused private address/);
@@ -148,7 +148,7 @@ test('media: over real connections, a redirect to a stored image, a 404, a refus
   const fetchImpl = checkedFetch(async () => ['127.0.0.1'], () => false);
   const base = `http://media.test:${srv.port}`;
   const refs = ['/r', '/gone.jpg', '/gz.png'].map((p, i) => ({ url: base + p, castHash: `0x0${i}` }));
-  const w = ExportWriter.create(fs.mkdtempSync(path.join(os.tmpdir(), 'fcx-media-')), 1);
+  const w = ExportWriter.create(fs.mkdtempSync(path.join(os.tmpdir(), 'castsnap-media-')), 1);
   try {
     const { rows } = await downloadMedia(refs, w, { fetchImpl, resolve: async () => ['93.184.216.34'], wait: async () => {} });
     const sha = createHash('sha256').update(PNG).digest('hex');

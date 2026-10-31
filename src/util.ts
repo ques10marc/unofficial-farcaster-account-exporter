@@ -2,7 +2,7 @@
 
 export const VERSION = '0.1.0';
 // Sent to protocol nodes only (SPEC "Network etiquette").
-export const USER_AGENT = `fcx/${VERSION} (+https://github.com/ques10marc/unofficial-farcaster-account-exporter)`;
+export const USER_AGENT = `castsnap/${VERSION} (+https://github.com/ques10marc/unofficial-farcaster-account-exporter)`;
 export const LIBRARIES = { '@farcaster/core': '0.20.0', '@farcaster/hub-nodejs': '0.17.0' } as const;
 
 // Farcaster timestamps are seconds since 2021-01-01T00:00:00Z.

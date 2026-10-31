@@ -1,13 +1,13 @@
 name: Bug report
-description: Something went wrong while running fcx or the quick capture.
+description: Something went wrong while running castsnap or the quick capture.
 title: "[bug] "
 labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: |
-        **Before you start:** never paste a session token, any DM, bookmark or draft text, export files, or `fcx find` output. Replace your home folder path with `~`.
-        `fcx verify` output is safe to paste, because it holds statuses and counts only. Security problems go through SECURITY.md, not an issue.
+        **Before you start:** never paste a session token, any DM, bookmark or draft text, export files, or `castsnap find` output. Replace your home folder path with `~`.
+        `castsnap verify` output is safe to paste, because it holds statuses and counts only. Security problems go through SECURITY.md, not an issue.
   - type: checkboxes
     id: privacy
     attributes:
@@ -20,11 +20,11 @@ body:
     attributes:
       label: What were you running?
       options:
-        - fcx export (public data only)
-        - fcx export --private
-        - fcx auth-check
-        - fcx verify
-        - fcx find
+        - castsnap export (public data only)
+        - castsnap export --private
+        - castsnap auth-check
+        - castsnap verify
+        - castsnap find
         - Quick capture (scripts/quick-capture.mjs)
         - Other
     validations:
@@ -34,7 +34,7 @@ body:
     attributes:
       label: Command you ran
       description: You can replace your FID with YOUR_FID.
-      placeholder: node bin/fcx.js export --fid YOUR_FID --private
+      placeholder: node bin/castsnap.js export --fid YOUR_FID --private
     validations:
       required: true
   - type: input
@@ -53,7 +53,7 @@ body:
     id: output
     attributes:
       label: Output
-      description: The last lines the command printed, plus the whole `fcx verify` output if you ran it. Check it for private text before posting.
+      description: The last lines the command printed, plus the whole `castsnap verify` output if you ran it. Check it for private text before posting.
       render: text
   - type: input
     id: os
@@ -73,7 +73,7 @@ body:
   - type: input
     id: commit
     attributes:
-      label: fcx commit
-      description: Output of `git rev-parse --short HEAD`, run in the fcx folder.
+      label: castsnap commit
+      description: Output of `git rev-parse --short HEAD`, run in the castsnap folder.
     validations:
       required: true

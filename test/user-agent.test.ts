@@ -17,7 +17,7 @@ async function listen<T extends http.Server | http2.Http2Server>(server: T): Pro
   return { server, port: (server.address() as AddressInfo).port };
 }
 
-test('protocol nodes are told the requests come from fcx, over HTTP and gRPC', { timeout: 10_000 }, async () => {
+test('protocol nodes are told the requests come from castsnap, over HTTP and gRPC', { timeout: 10_000 }, async () => {
   const seen: (string | undefined)[] = [];
   const h1 = await listen(http.createServer((req, res) => {
     seen.push(req.headers['user-agent']);

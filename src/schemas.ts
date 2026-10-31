@@ -17,8 +17,8 @@ const obj = (required: string[], properties: Record<string, unknown>): Schema =>
 function fileSchema(dataset: string, record: Schema): Schema {
   return {
     $schema: 'https://json-schema.org/draft/2020-12/schema',
-    $id: `https://fcx.local/schemas/v1/${dataset}.schema.json`,
-    title: `fcx normalized ${dataset} (schemaVersion 1)`,
+    $id: `https://castsnap.local/schemas/v1/${dataset}.schema.json`,
+    title: `castsnap normalized ${dataset} (schemaVersion 1)`,
     type: 'object',
     additionalProperties: false,
     required: ['schemaVersion', 'dataset', 'fid', 'records'],
@@ -254,8 +254,8 @@ export type ReasonCode = (typeof REASON_CODES)[number];
 
 export const RECONCILIATION_SCHEMA: Schema = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
-  $id: 'https://fcx.local/schemas/v1/reconciliation.schema.json',
-  title: 'fcx reconciliation (schemaVersion 1)',
+  $id: 'https://castsnap.local/schemas/v1/reconciliation.schema.json',
+  title: 'castsnap reconciliation (schemaVersion 1)',
   type: 'object',
   additionalProperties: false,
   required: ['schemaVersion', 'fid', 'reasonCodes', 'summary', 'entries'],

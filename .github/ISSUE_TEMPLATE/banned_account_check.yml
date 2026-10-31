@@ -1,5 +1,5 @@
 name: Banned or restricted account
-description: Tell us what fcx could export from an account that the Farcaster app banned or restricted.
+description: Tell us what castsnap could export from an account that the Farcaster app banned or restricted.
 title: "[account access] "
 labels: ["account-access"]
 body:
@@ -39,7 +39,7 @@ body:
   - type: dropdown
     id: public-export
     attributes:
-      label: Public export (fcx export --fid YOUR_FID, no token)
+      label: Public export (castsnap export --fid YOUR_FID, no token)
       options:
         - Finished with exit code 0
         - Failed
@@ -49,7 +49,7 @@ body:
   - type: dropdown
     id: auth-check
     attributes:
-      label: Result of fcx auth-check --fid YOUR_FID
+      label: Result of castsnap auth-check --fid YOUR_FID
       options:
         - "OK: token accepted"
         - "Failed: HTTP 401"
@@ -62,7 +62,7 @@ body:
   - type: dropdown
     id: private-export
     attributes:
-      label: Private export (fcx export --private) or quick capture
+      label: Private export (castsnap export --private) or quick capture
       options:
         - Finished with exit code 0
         - Finished, but some datasets are not complete
@@ -78,7 +78,7 @@ body:
   - type: textarea
     id: output
     attributes:
-      label: Error lines or fcx verify output (optional)
+      label: Error lines or castsnap verify output (optional)
       description: Statuses and counts only. Replace your home folder path with `~`.
       render: text
   - type: textarea

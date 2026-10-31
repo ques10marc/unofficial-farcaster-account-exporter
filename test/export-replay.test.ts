@@ -52,13 +52,13 @@ test('offline import-check rebuilds following and followers from the export alon
 
 test('verify catches a modified file (AC-03) and a forged signature (AC-04)', async () => {
   const r = await replayExport();
-  const a = tmpDir('fcx-tamper-');
+  const a = tmpDir('castsnap-tamper-');
   fs.cpSync(r.dir, a, { recursive: true });
   fs.appendFileSync(path.join(a, 'normalized/casts.json'), ' ');
   const v1 = await verifyExport(a);
   assert.equal(v1.checks.find((c) => c.id === 'AC-03')!.verdict, 'FAIL');
 
-  const b = tmpDir('fcx-forge-');
+  const b = tmpDir('castsnap-forge-');
   fs.cpSync(r.dir, b, { recursive: true });
   const rel = 'raw/protocol/reactions.pb';
   const msgs = decodeDelimited(fs.readFileSync(path.join(b, rel))).map((x) => Message.decode(x));

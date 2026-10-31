@@ -1,4 +1,4 @@
-// A full `fcx export --private` against the local mock server: client requests (public and private) go
+// A full `castsnap export --private` against the local mock server: client requests (public and private) go
 // over real HTTP to 127.0.0.1, the protocol is replayed from FID 11's recorded fixture, and media is
 // served by a stub. No request leaves the machine.
 //
@@ -26,7 +26,7 @@ const PNG = Buffer.from('89504e470d0a1a0a0000000d4948445200000001000000010806000
 // so it is neither an own cast nor a context cast. Signed with a throwaway key derived from a fixed
 // string, so the cast and its hash are the same on every run; the key is registered nowhere.
 export async function lookupOnlyCast(): Promise<Message> {
-  const signer = new NobleEd25519Signer(new Uint8Array(createHash('sha256').update('fcx throwaway test signer, fid 999').digest()));
+  const signer = new NobleEd25519Signer(new Uint8Array(createHash('sha256').update('castsnap throwaway test signer, fid 999').digest()));
   const body = { text: 'a bookmarked cast that only the bookmark lookup finds', embeds: [], embedsDeprecated: [], mentions: [], mentionsPositions: [], type: CastType.CAST };
   const r = await makeCastAdd(body, { fid: 999, network: FarcasterNetwork.MAINNET, timestamp: (Date.UTC(2025, 5, 1) - FARCASTER_EPOCH_MS) / 1000 }, signer);
   if (r.isErr()) throw r.error;
@@ -53,12 +53,12 @@ export interface MediaCall {
 // makeClient: builds the client from the harness's options (pointed at the mock), so a test can wrap its
 // fetch or subclass it.
 export async function mockPrivateExport(o: { token?: string; mock?: Partial<MockOptions>; out?: string; export?: Partial<ExportOptions>; onMedia?: (outDir: string) => void; makeClient?: (opts: ClientOptions) => ClientApi } = {}) {
-  const token = o.token ?? `fcx-sentinel-${randomUUID()}`;
+  const token = o.token ?? `castsnap-sentinel-${randomUUID()}`;
   // The lookup-only cast is appended last, so the other bookmarks keep their positions.
   const lookupOnly = await lookupOnlyCast();
   const data = o.mock?.data ?? buildPrivateFixture();
   const mock = await startMock({ token, rejectPrefixes: { primary: 401 }, once429: ['/v1/favorite-frames'], ...o.mock, data: { ...data, bookmarks: [...data.bookmarks, apiCastFromMessage(lookupOnly)] } });
-  const out = o.out ?? tmpDir('fcx-private-');
+  const out = o.out ?? tmpDir('castsnap-private-');
   const logs: string[] = [];
   const mediaCalls: MediaCall[] = [];
   const noWait = async () => {};

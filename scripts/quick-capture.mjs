@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Quick capture: saves verbatim pages from the Farcaster client API to a local folder,
-// as a quick first copy before a full fcx export. Zero dependencies; Node >= 20.
+// as a quick first copy before a full castsnap export. Zero dependencies; Node >= 20.
 //
 // Usage:
 //   node scripts/quick-capture.mjs                         # prompts for your session token (hidden)

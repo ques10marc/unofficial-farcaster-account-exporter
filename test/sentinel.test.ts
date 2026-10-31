@@ -18,7 +18,7 @@ import { fixture, replayExport } from './helpers.ts';
 import { mockPrivateExport } from './private-run.ts';
 import { ReplayTransport } from './replay.ts';
 
-const SENTINEL = `fcx-sentinel-${randomUUID()}`;
+const SENTINEL = `castsnap-sentinel-${randomUUID()}`;
 const env = { FC_SESSION_TOKEN: `Bearer ${SENTINEL}` };
 const repo = path.join(import.meta.dirname, '..');
 
@@ -67,9 +67,9 @@ test('a server echoing the token into a saved page makes the export exit 2', asy
   fs.rmSync(r.dir, { recursive: true, force: true });
 });
 
-// ---------- fcx and the quick-capture script, run as child processes ----------
+// ---------- castsnap and the quick-capture script, run as child processes ----------
 
-const home = fs.mkdtempSync(path.join(os.tmpdir(), 'fcx-home-'));
+const home = fs.mkdtempSync(path.join(os.tmpdir(), 'castsnap-home-'));
 // preload: module source that runs before the program. The sentinel is only ever in FC_SESSION_TOKEN.
 function run(args: string[], o: { token?: boolean; preload?: string; timeout?: number } = {}): { code: number | null; out: string } {
   const env: Record<string, string> = { PATH: process.env.PATH ?? '', HOME: home, ...(o.token ? { FC_SESSION_TOKEN: SENTINEL } : {}) };
@@ -77,17 +77,17 @@ function run(args: string[], o: { token?: boolean; preload?: string; timeout?: n
   const p = spawnSync(process.execPath, [...pre, ...args], { cwd: repo, env, encoding: 'utf8', timeout: o.timeout ?? 20_000 });
   return { code: p.status, out: p.stdout + p.stderr };
 }
-const FCX = ['bin/fcx.js', 'export', '--fid', '11'];
+const CASTSNAP = ['bin/castsnap.js', 'export', '--fid', '11'];
 const QUICK = ['scripts/quick-capture.mjs', '--fid', '11'];
 
 test('a token pasted as an argument or command is not echoed, but a mistyped flag is still named', () => {
-  for (const args of [[...FCX, SENTINEL], [...QUICK, SENTINEL], ['bin/fcx.js', SENTINEL]]) {
+  for (const args of [[...CASTSNAP, SENTINEL], [...QUICK, SENTINEL], ['bin/castsnap.js', SENTINEL]]) {
     const r = run(args);
     assert.equal(r.code, 64, r.out);
     assert.ok(!r.out.includes(SENTINEL), `echoed by ${args.filter((a) => a !== SENTINEL).join(' ')}`);
     assert.match(r.out, /not shown in case it is your session token/);
   }
-  assert.match(run([...FCX, '--fdi']).out, /unknown argument: --fdi/);
+  assert.match(run([...CASTSNAP, '--fdi']).out, /unknown argument: --fdi/);
   assert.match(run([...QUICK, '--fdi']).out, /Unknown argument: --fdi/);
 });
 
@@ -100,7 +100,7 @@ const CRASHES = {
 
 test('an error thrown or rejected outside the main promise chain is printed redacted, with exit 1', { timeout: 60_000 }, () => {
   for (const [kind, preload] of Object.entries(CRASHES)) {
-    for (const args of [['bin/fcx.js', 'auth-check', '--fid', '11', '--base', 'http://127.0.0.1:9'], ['scripts/quick-capture.mjs']]) {
+    for (const args of [['bin/castsnap.js', 'auth-check', '--fid', '11', '--base', 'http://127.0.0.1:9'], ['scripts/quick-capture.mjs']]) {
       const r = run(args, { token: true, preload });
       assert.equal(r.code, 1, r.out);
       assert.ok(!r.out.includes(SENTINEL), `${kind}: printed by ${args[0]}`);

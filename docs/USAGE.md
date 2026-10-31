@@ -1,9 +1,9 @@
-# Using `fcx`
+# Using `castsnap`
 
-`fcx` exports one Farcaster account (FID) into a new folder that is never modified afterwards, then checks it offline.
+`castsnap` exports one Farcaster account (FID) into a new folder that is never modified afterwards, then checks it offline.
 
 - **Without `--private`,** it exports the protocol data and the public parts of the app's API. No token is used or needed.
-- **With `--private`,** it also exports what exists only on the app's servers: bookmarks, direct casts (DMs), drafts, mutes and favourite mini apps, plus the media of bookmarked casts. This needs your web session token (see below). fcx never asks for a seed phrase.
+- **With `--private`,** it also exports what exists only on the app's servers: bookmarks, direct casts (DMs), drafts, mutes and favourite mini apps, plus the media of bookmarked casts. This needs your web session token (see below). castsnap never asks for a seed phrase.
 
 If the Farcaster app banned or restricted your account, start with [BANNED_ACCOUNTS.md](BANNED_ACCOUNTS.md).
 
@@ -26,26 +26,26 @@ From the project folder, install the pinned dependencies once:
 npm ci
 ```
 
-`npm ci` currently reports high-severity vulnerabilities (4 as of October 2026). They come from two advisories in libraries that the official `@farcaster` packages depend on: one in `@faker-js/faker`'s `helpers.fake`, which neither fcx nor `@farcaster/core` calls, and one in `@grpc/grpc-js`'s `getAuthContext`, which fcx never calls. npm's suggested fix is to downgrade the `@farcaster` packages to older releases, which fcx can't do. `npm ci` may also print an `install-scripts` warning that `protobufjs` has an install script not yet covered by `allowScripts`. The script only compares version ranges in `package.json` files and is safe to run. `npm ci --ignore-scripts` skips it, with no warning, and fcx's tests pass without it.
+`npm ci` currently reports high-severity vulnerabilities (4 as of October 2026). They come from two advisories in libraries that the official `@farcaster` packages depend on: one in `@faker-js/faker`'s `helpers.fake`, which neither castsnap nor `@farcaster/core` calls, and one in `@grpc/grpc-js`'s `getAuthContext`, which castsnap never calls. npm's suggested fix is to downgrade the `@farcaster` packages to older releases, which castsnap can't do. `npm ci` may also print an `install-scripts` warning that `protobufjs` has an install script not yet covered by `allowScripts`. The script only compares version ranges in `package.json` files and is safe to run. `npm ci --ignore-scripts` skips it, with no warning, and castsnap's tests pass without it.
 
 **Before a full run, check your free disk space.** A large account's export, with its media, can take a few gigabytes, and your computer needs room to spare while it runs. Running out can freeze it.
 
 Public data only (no token):
 
 ```bash
-node bin/fcx.js export --fid YOUR_FID
+node bin/castsnap.js export --fid YOUR_FID
 ```
 
 Everything, including private data (asks for your token at a hidden prompt):
 
 ```bash
-node bin/fcx.js export --fid YOUR_FID --private
+node bin/castsnap.js export --fid YOUR_FID --private
 ```
 
 Either command writes a new folder named `fc-export-` plus your FID and the time, under `~/FarcasterExports/`. The last lines print the exact folder. Check it by passing that folder to `verify`:
 
 ```bash
-node bin/fcx.js verify PASTE_THE_FOLDER_HERE
+node bin/castsnap.js verify PASTE_THE_FOLDER_HERE
 ```
 
 **What `verify` reports:**
@@ -58,10 +58,10 @@ node bin/fcx.js verify PASTE_THE_FOLDER_HERE
 ### Security (read first)
 
 - **The token is a password.** While it is valid, it gives full access to your account.
-  - Paste it only into `fcx`'s hidden prompt, in your own terminal.
+  - Paste it only into `castsnap`'s hidden prompt, in your own terminal.
   - **Never paste it into an issue, a chat, or anyone else's tool.**
   - **Anyone who asks you for your token is trying to take over your account,** even if they say they're from this project. The maintainer will never ask for it.
-- **What `fcx` does with it:**
+- **What `castsnap` does with it:**
   - It keeps the token in memory only. It never writes it to disk, prints it or logs it, and error messages are redacted.
   - It sends the token only to `https://client.farcaster.xyz` or `https://farcaster.xyz/~api`, and never along a redirect. Protocol nodes and media hosts never receive it.
   - Before writing anything, it checks with `/v2/me` that the token belongs to `--fid`. If it doesn't, or the token is rejected, the run stops and no folder is created.
@@ -77,14 +77,14 @@ node bin/fcx.js verify PASTE_THE_FOLDER_HERE
 4. In the Network filter box, type `~api`.
 5. Click any request in the list, such as `me`, `unseen` or `feed-items`.
 6. Under **Headers → Request Headers**, find the `authorization` header. Its value starts with `Bearer `.
-7. Copy the value. You can include the word `Bearer`, or even the whole `authorization: Bearer …` line; `fcx` strips both.
+7. Copy the value. You can include the word `Bearer`, or even the whole `authorization: Bearer …` line; `castsnap` strips both.
 
 If no `~api` request has an `authorization` header, stop and open a **Bug report**: the web app may have changed how it signs in.
 
 ### 2. Check the token (optional, writes nothing)
 
 ```bash
-node bin/fcx.js auth-check --fid YOUR_FID
+node bin/castsnap.js auth-check --fid YOUR_FID
 ```
 
 Paste the token at the prompt; nothing appears while you paste. Press Enter. It prints one line:
@@ -96,7 +96,7 @@ Paste the token at the prompt; nothing appears while you paste. Press Enter. It 
 ### 3. Run the export
 
 ```bash
-node bin/fcx.js export --fid YOUR_FID --private
+node bin/castsnap.js export --fid YOUR_FID --private
 ```
 
 Paste the token again at the prompt. The run prints:
@@ -106,7 +106,7 @@ Paste the token again at the prompt. The run prints:
 3. the folder;
 4. the token self-scan line.
 
-**Host.** `fcx` uses `https://client.farcaster.xyz` first. If that host rejects the token (401 or 403), `fcx` retries via `https://farcaster.xyz/~api`, the host the web app itself uses, and stays there for the rest of the run. `--base URL` pins one of the two hosts and turns the fallback off.
+**Host.** `castsnap` uses `https://client.farcaster.xyz` first. If that host rejects the token (401 or 403), `castsnap` retries via `https://farcaster.xyz/~api`, the host the web app itself uses, and stays there for the rest of the run. `--base URL` pins one of the two hosts and turns the fallback off.
 
 **Optional: keep the token in the environment instead of the prompt.** This lets `export` and `verify` share it; `verify` re-scans the export for the token only when `FC_SESSION_TOKEN` is set. The commands below read the token without echoing it and without saving it in your shell history.
 
@@ -158,7 +158,7 @@ Every successful response is saved verbatim under `raw/client/`. Error responses
 
 `verify` can't see the app, so it prints these steps with the exact command for your export folder. Each check passes or fails.
 
-`fcx find` prints matching lines in your own terminal. Those lines include DM and bookmark text, so **don't paste them anywhere**; report only how many matched.
+`castsnap find` prints matching lines in your own terminal. Those lines include DM and bookmark text, so **don't paste them anywhere**; report only how many matched.
 
 **Bookmarks, 5 of 5** (`verify` labels this AC-12(c)):
 1. In the app, open your bookmarks.
@@ -166,7 +166,7 @@ Every successful response is saved verbatim under `raw/client/`. Error responses
 3. Run the command below for each phrase. The check passes when each of the 5 prints at least one line starting with `bookmarks`.
 
 ```bash
-node bin/fcx.js find PASTE_THE_FOLDER_HERE "PASTE A PHRASE HERE"
+node bin/castsnap.js find PASTE_THE_FOLDER_HERE "PASTE A PHRASE HERE"
 ```
 
 **Direct casts, 3 of 3** (`verify` labels this AC-18):
@@ -183,13 +183,13 @@ node bin/fcx.js find PASTE_THE_FOLDER_HERE "PASTE A PHRASE HERE"
 | `--out DIR` | `~/FarcasterExports` | Parent folder for the new export folder |
 | `--private` | off | Also export bookmarks, DMs, drafts, mutes and mini apps, using your session token |
 | `--media LIST` | `own,bookmarks` | Media to download, stored by SHA-256: `own`, `bookmarks`, `own,bookmarks`, or `none`. `bookmarks` needs `--private` |
-| `--hub HOST` | `snap.farcaster.xyz:3383` | Protocol source tried first: a gRPC `host:port`, or an `https://` HTTP API base. `fcx` falls back only between Farcaster's own Snapchain nodes: gRPC on `snap.farcaster.xyz:3383`, then `crackle.farcaster.xyz:3383`, then their HTTP APIs on port `3381` in the same order. Any other `--hub` gets no fallback, so one export never mixes two networks. Farcaster's nodes answer only on ports 3383 and 3381, so a network that allows only web traffic (port 443) blocks them. To export from Hypersnap instead, pass `--hub https://haatz.quilibrium.com`, which answers on port 443; `verify`'s checks are written for Snapchain |
+| `--hub HOST` | `snap.farcaster.xyz:3383` | Protocol source tried first: a gRPC `host:port`, or an `https://` HTTP API base. `castsnap` falls back only between Farcaster's own Snapchain nodes: gRPC on `snap.farcaster.xyz:3383`, then `crackle.farcaster.xyz:3383`, then their HTTP APIs on port `3381` in the same order. Any other `--hub` gets no fallback, so one export never mixes two networks. Farcaster's nodes answer only on ports 3383 and 3381, so a network that allows only web traffic (port 443) blocks them. To export from Hypersnap instead, pass `--hub https://haatz.quilibrium.com`, which answers on port 443; `verify`'s checks are written for Snapchain |
 | `--base URL` | `https://client.farcaster.xyz`, then `https://farcaster.xyz/~api` | Pins the client API host, with no fallback. Only those two hosts, or a loopback address for testing, are accepted |
 
 Other commands:
 
-- **`node bin/fcx.js auth-check --fid N [--base URL]`** checks the session token against `/v2/me` and writes nothing.
-- **`node bin/fcx.js find DIR <text | 0xhash-prefix | fid | username>`** searches an export, for spot checks.
+- **`node bin/castsnap.js auth-check --fid N [--base URL]`** checks the session token against `/v2/me` and writes nothing.
+- **`node bin/castsnap.js find DIR <text | 0xhash-prefix | fid | username>`** searches an export, for spot checks.
 - **`node scripts/import-check.mjs DIR`** rebuilds following, followers and bookmarks (with cast text) from the export alone, with network access blocked. On macOS, `sandbox-exec -p '(version 1)(allow default)(deny network*)' node scripts/import-check.mjs DIR` has the operating system enforce that.
 - **`node scripts/print-account-control.mjs DIR`** prints the custody and recovery address on record for the exported account, read offline from its on-chain ID-registry events. It shows each address and its history, marks the recovery address's operator as unknown, and explains how to check who controls that address (its `owner()`, and a Safe multisig's owners) on a block explorer. It makes no network calls and writes nothing.
 - **`npm test`** runs the unit and integration tests, on recorded fixtures and a local mock server. It uses no network and no real token.

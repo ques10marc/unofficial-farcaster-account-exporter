@@ -1,5 +1,5 @@
 // Local mock of the Farcaster client API (127.0.0.1 only) for the private adapter's tests. It implements
-// the private endpoints fcx uses (paths and result keys from types.yml), cursor pagination with
+// the private endpoints castsnap uses (paths and result keys from types.yml), cursor pagination with
 // next.cursor, 401 for a missing or wrong token, 400 for a limit above an endpoint's maximum, 429 with
 // Retry-After, and two "hosts" as path prefixes (/primary and /~api) so the host fallback can be tested.
 // Public endpoints are served from the recorded FID 11 fixture.

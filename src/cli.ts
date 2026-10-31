@@ -1,4 +1,4 @@
-// fcx command line. See docs/SPEC.md "Interface".
+// castsnap command line. See docs/SPEC.md "Interface".
 
 import os from 'node:os';
 import path from 'node:path';
@@ -9,13 +9,13 @@ import { normalizeBase, readSessionToken, redactRegistered, TOKEN_HOSTS, tokenHo
 import { interrupt, VERSION } from './util.ts';
 import { formatChecks, verifyExport } from './verify.ts';
 
-const USAGE = `fcx ${VERSION} - export a verifiable snapshot of one Farcaster account
+const USAGE = `castsnap ${VERSION} - export a verifiable snapshot of one Farcaster account
 
 Usage:
-  fcx export --fid N [--out DIR] [--private] [--media own,bookmarks|own|bookmarks|none] [--hub HOST] [--base URL]
-  fcx auth-check --fid N [--base URL]
-  fcx verify DIR [--json]
-  fcx find DIR <query>
+  castsnap export --fid N [--out DIR] [--private] [--media own,bookmarks|own|bookmarks|none] [--hub HOST] [--base URL]
+  castsnap auth-check --fid N [--base URL]
+  castsnap verify DIR [--json]
+  castsnap find DIR <query>
 
 export      Protocol data (gRPC ${'snap.farcaster.xyz:3383'}, falling back only to Farcaster's own Snapchain
             nodes) and client data.

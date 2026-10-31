@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Read-only: print the custody and recovery address on record for an fcx export, from its
+// Read-only: print the custody and recovery address on record for a castsnap export, from its
 // on-chain ID-registry events alone. It makes no network calls and writes nothing.
 //
 //   node scripts/print-account-control.mjs <your-export-dir>
@@ -32,7 +32,7 @@ if (!fs.existsSync(file)) {
   process.exit(1);
 }
 
-// length-delimited protobuf: a varint length, then that many bytes, repeated. Matches how fcx wrote it.
+// length-delimited protobuf: a varint length, then that many bytes, repeated. Matches how castsnap wrote it.
 function* decodeDelimited(buf) {
   let o = 0;
   while (o < buf.length) {

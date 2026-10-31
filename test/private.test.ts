@@ -23,7 +23,7 @@ import { buildPrivateFixture } from './private-fixtures.ts';
 import { mockPrivateExport } from './private-run.ts';
 
 const repo = path.join(import.meta.dirname, '..');
-const sentinel = () => `fcx-sentinel-${randomUUID()}`;
+const sentinel = () => `castsnap-sentinel-${randomUUID()}`;
 const noLimit = () => new RateLimiter({ windows: [] });
 const PRIVATE_PATHS = ['/v2/me', '/v2/bookmarked-casts', '/v2/direct-cast-conversation-list', '/v2/direct-cast-conversation-messages', '/v2/draft-casts', '/v2/get-muted-keywords', '/v2/get-muted-users', '/v2/get-muted-channels', '/v1/favorite-frames'];
 const verdicts = (checks: { id: string; verdict: string }[]) => Object.fromEntries(checks.map((c) => [c.id, c.verdict]));
@@ -131,9 +131,9 @@ test('auth-check: a token for another FID is reported, and a rejected token neve
 
 test('export --private aborts before writing anything when the token is rejected or belongs to another FID', async () => {
   for (const [fid, token] of [[12, undefined], [11, sentinel()]] as const) {
-    const out = tmpDir('fcx-abort-');
+    const out = tmpDir('castsnap-abort-');
     await assert.rejects(
-      mockPrivateExport({ out, token, export: { fid, ...(token ? { client: new ClientApi({ token: 'fcx-sentinel-wrong-token-0000', bases: ['http://127.0.0.1:9/~api'], explicitBase: true, privateLimiter: noLimit(), wait: async () => {} }) } : {}) } }),
+      mockPrivateExport({ out, token, export: { fid, ...(token ? { client: new ClientApi({ token: 'castsnap-sentinel-wrong-token-0000', bases: ['http://127.0.0.1:9/~api'], explicitBase: true, privateLimiter: noLimit(), wait: async () => {} }) } : {}) } }),
       (e: Error) => e instanceof AuthCheckError && /Nothing was written/.test(e.message),
     );
     assert.deepEqual(exportDirs(out), [], `fid ${fid}: an export directory was created`);
@@ -315,7 +315,7 @@ test('a run without --private sends no token and leaves the private criteria N/A
 
 function run(args: string[], env: Record<string, string>): Promise<{ code: number | null; out: string }> {
   return new Promise((resolve) => {
-    const p = spawn(process.execPath, [path.join(repo, 'bin/fcx.js'), ...args], { env: { PATH: process.env.PATH ?? '', HOME: process.env.HOME ?? '', ...env }, stdio: ['ignore', 'pipe', 'pipe'] });
+    const p = spawn(process.execPath, [path.join(repo, 'bin/castsnap.js'), ...args], { env: { PATH: process.env.PATH ?? '', HOME: process.env.HOME ?? '', ...env }, stdio: ['ignore', 'pipe', 'pipe'] });
     let out = '';
     p.stdout.on('data', (d) => (out += d));
     p.stderr.on('data', (d) => (out += d));
@@ -341,7 +341,7 @@ test('CLI: auth-check and export --private against the mock, with the token only
     assert.equal(rejected.code, 1);
     assert.match(rejected.out, /Token check failed: \/v2\/me returned HTTP 401/);
 
-    const out = tmpDir('fcx-cli-');
+    const out = tmpDir('castsnap-cli-');
     const abort = await run(['export', '--fid', '12', '--private', '--base', base, '--out', out], { FC_SESSION_TOKEN: t });
     assert.equal(abort.code, 1, abort.out);
     assert.match(abort.out, /not --fid 12\. Nothing was written\./);
@@ -446,6 +446,6 @@ test('an outage during the DM messages: after the first conversation uses up its
 test('the repo contains no sentinel after the private runs', () => {
   const skip = new Set(['node_modules', '.git']);
   const walk = (d: string): string[] =>
-    fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (skip.has(e.name) ? [] : e.isDirectory() ? walk(path.join(d, e.name)) : e.isFile() && /fcx-sentinel-[0-9a-f]{8}-/.test(fs.readFileSync(path.join(d, e.name), 'utf8')) ? [path.join(d, e.name)] : []));
+    fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (skip.has(e.name) ? [] : e.isDirectory() ? walk(path.join(d, e.name)) : e.isFile() && /castsnap-sentinel-[0-9a-f]{8}-/.test(fs.readFileSync(path.join(d, e.name), 'utf8')) ? [path.join(d, e.name)] : []));
   assert.deepEqual(walk(repo), []);
 });

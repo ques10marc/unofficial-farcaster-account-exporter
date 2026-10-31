@@ -1,18 +1,18 @@
 {
-  "name": "fcx",
+  "name": "castsnap",
   "version": "0.1.0",
   "private": true,
   "description": "Export a complete, verifiable, portable snapshot of one Farcaster account. See docs/SPEC.md.",
   "license": "MIT",
   "type": "module",
   "bin": {
-    "fcx": "bin/fcx.js"
+    "castsnap": "bin/castsnap.js"
   },
   "engines": {
     "node": ">=24"
   },
   "scripts": {
-    "fcx": "node bin/fcx.js",
+    "castsnap": "node bin/castsnap.js",
     "test": "node --test \"test/**/*.test.ts\"",
     "typecheck": "tsc -p tsconfig.json"
   },

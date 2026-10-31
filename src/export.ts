@@ -1,4 +1,4 @@
-// fcx export: protocol data (gRPC, with HTTP fallbacks) + client data (public, and private with --private)
+// castsnap export: protocol data (gRPC, with HTTP fallbacks) + client data (public, and private with --private)
 // -> one immutable directory. Layout and acceptance criteria: docs/SPEC.md. Three lanes run concurrently
 // because they use different hosts (one request at a time per host): protocol, client API, media.
 //
@@ -58,7 +58,7 @@ import { errMessage, fcTimeToIso, fromHex, interrupt, LIBRARIES, toHex, VERSION 
 import { ExportWriter } from './writer.ts';
 
 export const DEFAULT_GRPC = 'snap.farcaster.xyz:3383';
-// Farcaster's own public Snapchain nodes; snapchain lists both in src/network/mesh/nodes.rs. fcx falls back only
+// Farcaster's own public Snapchain nodes; snapchain lists both in src/network/mesh/nodes.rs. castsnap falls back only
 // between these, gRPC first (snap, then crackle) and then HTTP in the same order, so one export never mixes two
 // networks. haatz.quilibrium.com runs Hypersnap, a Snapchain fork planned to become a separate chain, so it is
 // used only when passed with --hub.
@@ -91,7 +91,7 @@ export interface DatasetEntry {
 }
 
 export interface Manifest {
-  tool: 'fcx';
+  tool: 'castsnap' | 'fcx'; // 'fcx': exports written before the rename
   version: string;
   schemaVersion: 1;
   fid: number;
@@ -187,7 +187,7 @@ const hostOf = (s: string) => {
 const SNAPCHAIN_HOSTS = new Set(SNAPCHAIN_NODES.map((n) => hostOf(n.grpc)));
 
 // --hub is tried first. Without it, or when it names one of Farcaster's own Snapchain nodes, the rest of
-// those nodes follow; any other node gets no fallback, since fcx cannot tell which network it serves.
+// those nodes follow; any other node gets no fallback, since castsnap cannot tell which network it serves.
 export function defaultTransports(hub?: string): ProtocolTransport[] {
   const own = [...SNAPCHAIN_NODES.map((n) => n.grpc), ...SNAPCHAIN_NODES.map((n) => n.http)];
   const specs = !hub ? own : SNAPCHAIN_HOSTS.has(hostOf(hub)) ? [hub, ...own] : [hub];
@@ -227,7 +227,7 @@ export async function runExport(opts: ExportOptions): Promise<ExportResult> {
   const writer = ExportWriter.create(opts.out, fid, now());
 
   const manifest: Manifest = {
-    tool: 'fcx',
+    tool: 'castsnap',
     version: VERSION,
     schemaVersion: 1,
     fid,
@@ -1065,9 +1065,9 @@ export async function runExport(opts: ExportOptions): Promise<ExportResult> {
     log(`Lane errors: ${laneErrors.join('; ')}.${notFetched.size ? ` Not fetched: ${[...notFetched].join(', ')}.` : ''}`);
     log(`Result: ${manifest.result} (exit ${exitCode}). Re-run the export; see docs/USAGE.md.`);
   }
-  log(`Files: ${files} (+SHA256SUMS). Verify with: fcx verify "${writer.root}"`);
+  log(`Files: ${files} (+SHA256SUMS). Verify with: castsnap verify "${writer.root}"`);
   if (transports.length && transports.every((t) => down.has(t))) {
-    log(`Protocol data: every node failed (${transports.map((t) => t.label).join(', ')}). fcx falls back only between Farcaster's own Snapchain nodes, which answer only on ports 3383 and 3381, so a network that allows only web traffic (port 443) cannot reach them. Run again later or from another network, or see --hub in docs/USAGE.md.`);
+    log(`Protocol data: every node failed (${transports.map((t) => t.label).join(', ')}). castsnap falls back only between Farcaster's own Snapchain nodes, which answer only on ports 3383 and 3381, so a network that allows only web traffic (port 443) cannot reach them. Run again later or from another network, or see --hub in docs/USAGE.md.`);
   }
   if (secrets.length) log(`Token self-scan: ${hits.length} file(s) contain the token${hits.length ? ' -- DELETE THIS FOLDER and report it' : ''}.`);
   return { dir: writer.root, exitCode, manifest };

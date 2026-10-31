@@ -21,7 +21,7 @@ export async function replayExport(over: Partial<ExportOptions> & { clientStore?
   }) as typeof fetch;
   const r = await runExport({
     fid: 11,
-    out: tmpDir('fcx-replay-'),
+    out: tmpDir('castsnap-replay-'),
     media: 'own',
     transports: [transport],
     client,

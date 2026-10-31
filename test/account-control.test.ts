@@ -50,7 +50,7 @@ function idRegisterEvent(s: EventSpec) {
 }
 
 function writeFixture(specs: EventSpec[]): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fcx-acctrl-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'castsnap-acctrl-'));
   fs.mkdirSync(path.join(dir, 'raw/protocol'), { recursive: true });
   const pb = encodeDelimited(specs.map((s) => OnChainEvent.encode(idRegisterEvent(s)).finish()));
   fs.writeFileSync(path.join(dir, 'raw/protocol/onchain-events-id-register.pb'), pb);
@@ -96,7 +96,7 @@ test('exits 64 with a usage line when no export dir is given', () => {
 });
 
 test('exits 1 when the export has no id-register events file', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fcx-acctrl-empty-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'castsnap-acctrl-empty-'));
   try {
     const r = runScript([dir]);
     assert.equal(r.code, 1, r.out);

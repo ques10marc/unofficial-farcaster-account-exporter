@@ -1,11 +1,11 @@
-# Contributing to fcx
+# Contributing to castsnap
 
-Thank you for helping. fcx handles people's private messages, and a credential that gives full access to their account, so a few rules come first.
+Thank you for helping. castsnap handles people's private messages, and a credential that gives full access to their account, so a few rules come first.
 
 ## Ground rules for everyone
 
 - **Never post a session token** anywhere: not in an issue, a PR, a commit, a log or a screenshot. If you posted one by mistake, see [SECURITY.md](SECURITY.md).
-- **Never post private data.** That includes DM, bookmark or draft text, export files, and `fcx find` output. `fcx verify` output is fine to share, because it holds statuses and counts only.
+- **Never post private data.** That includes DM, bookmark or draft text, export files, and `castsnap find` output. `castsnap verify` output is fine to share, because it holds statuses and counts only.
 - **Replace your home folder path with `~`** in anything you paste.
 - **Your FID and username are optional.** Including them links your report to your Farcaster account.
 
@@ -19,7 +19,7 @@ Use the **Bug report** issue form. It asks for:
 - the last lines of output
 - your OS
 - `node --version`
-- the fcx commit (`git rev-parse --short HEAD`)
+- the castsnap commit (`git rev-parse --short HEAD`)
 
 ## Banned or restricted accounts
 
@@ -37,7 +37,7 @@ Don't open a public issue. Follow [SECURITY.md](SECURITY.md).
 
 ## AI-assisted contributions
 
-fcx itself is developed with AI coding assistants. AI help is welcome under three rules:
+castsnap itself is developed with AI coding assistants. AI help is welcome under three rules:
 
 1. **Disclose it.** Say in the PR description which tools you used and what for; one line is enough. A commit trailer such as `Co-Authored-By:` or `Assisted-by:` is welcome, but it doesn't replace the disclosure in the PR.
 2. **A person is accountable for every change.** You must have read and understood every line you submit, and run the tests yourself. You must be able to answer review questions without handing them back to a tool.
@@ -51,7 +51,7 @@ Agents working in this repository: read [AGENTS.md](AGENTS.md).
 
 ## Development setup
 
-You need Node 24 or newer, and git. fcx runs its TypeScript directly with Node's type stripping, so there is no build step.
+You need Node 24 or newer, and git. castsnap runs its TypeScript directly with Node's type stripping, so there is no build step.
 
 ```bash
 npm ci
@@ -70,7 +70,7 @@ npm run typecheck
 ## Code guidelines
 
 - **Match the style of the surrounding code.**
-- **Dependencies are pinned to exact versions.** Adding or upgrading one needs an agreed issue first. fcx handles session tokens, so every dependency is part of its security boundary.
+- **Dependencies are pinned to exact versions.** Adding or upgrading one needs an agreed issue first. castsnap handles session tokens, so every dependency is part of its security boundary.
 - **Tests never touch the network or real account data.** Use `test/mock-server.ts` and the recorded public fixtures in `test/fixtures/`.
 - **Never commit export folders** (`fc-export-*`, `quick-*`). `.gitignore` excludes them.
 

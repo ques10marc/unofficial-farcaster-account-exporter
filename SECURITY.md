@@ -1,6 +1,6 @@
 # Security policy
 
-fcx handles a session token that gives full access to a Farcaster account, and it writes people's private messages to disk. Please report security problems privately.
+castsnap handles a session token that gives full access to a Farcaster account, and it writes people's private messages to disk. Please report security problems privately.
 
 ## How to report
 
@@ -9,7 +9,7 @@ Use GitHub's private vulnerability reporting: on this repository's **Security** 
 Include:
 
 - what you found
-- the fcx commit
+- the castsnap commit
 - how to reproduce it with a fake token or the test mock server (`test/mock-server.ts`)
 
 Never include a real token or real private data.
@@ -28,7 +28,7 @@ For example:
 
 1. Delete the post or comment.
 2. Sign out of farcaster.xyz in every browser, then sign in again. In a test this did not end a copied token, but it does no harm.
-3. Treat the token as exposed for as long as it works: there is no known way for you to revoke it. To check whether it still works, run `node bin/fcx.js auth-check --fid YOUR_FID` and paste the old token. Once it no longer works, the check fails with HTTP 401.
+3. Treat the token as exposed for as long as it works: there is no known way for you to revoke it. To check whether it still works, run `node bin/castsnap.js auth-check --fid YOUR_FID` and paste the old token. Once it no longer works, the check fails with HTTP 401.
 
 ## Supported versions
 
