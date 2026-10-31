@@ -90,7 +90,7 @@ In every command below, replace `YOUR_FID` with your FID.
   - Never paste it into an issue, a chat, or anyone else's tool.
   - **Anyone who asks you for your token is trying to take over your account,** even if they say they're from this project. The maintainer will never ask for it.
 - **What fcx does with the token:** fcx keeps it in memory only. It sends it only to `https://client.farcaster.xyz` or `https://farcaster.xyz/~api`, and never along a redirect. At the end it scans its own output for the token and prints `Token self-scan: N file(s) contain the token.`, where N should be 0.
-- **Signing out may not revoke the token.** Nobody yet knows whether signing out of farcaster.xyz revokes it.
+- **Signing out does not revoke a copied token.** It may stay valid for an unknown time, and there is no known way for you to revoke it.
 - **Your export contains your DMs.** Keep it out of git and cloud sync unless you mean to share it.
 - **fcx never asks for your seed phrase or recovery phrase.** Anyone who does is not us.
 

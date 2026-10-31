@@ -26,6 +26,10 @@ From the project folder, install the pinned dependencies once:
 npm ci
 ```
 
+`npm ci` currently reports high-severity vulnerabilities (4 as of October 2026). They come from two advisories in libraries that the official `@farcaster` packages depend on: one in `@faker-js/faker`'s `helpers.fake`, which neither fcx nor `@farcaster/core` calls, and one in `@grpc/grpc-js`'s `getAuthContext`, which fcx never calls. npm's suggested fix is to downgrade the `@farcaster` packages to older releases, which fcx can't do. `npm ci` may also print an `install-scripts` warning that `protobufjs` has an install script not yet covered by `allowScripts`. The script only compares version ranges in `package.json` files and is safe to run. `npm ci --ignore-scripts` skips it, with no warning, and fcx's tests pass without it.
+
+**Before a full run, check your free disk space.** A large account's export, with its media, can take a few gigabytes, and your computer needs room to spare while it runs. Running out can freeze it.
+
 Public data only (no token):
 
 ```bash
@@ -62,7 +66,7 @@ node bin/fcx.js verify PASTE_THE_FOLDER_HERE
   - It sends the token only to `https://client.farcaster.xyz` or `https://farcaster.xyz/~api`, and never along a redirect. Protocol nodes and media hosts never receive it.
   - Before writing anything, it checks with `/v2/me` that the token belongs to `--fid`. If it doesn't, or the token is rejected, the run stops and no folder is created.
   - At the end, it scans its own output for the token and prints `Token self-scan: N file(s) contain the token.` N should be 0. If it isn't, the run exits with code 2: delete that folder.
-- **Signing out may not revoke the token.** Nobody yet knows whether signing out of farcaster.xyz revokes it.
+- **Signing out does not revoke a copied token.** A copied token may stay valid for an unknown time after you sign out, and there is no known way for you to revoke it. In a test, it kept working after signing out of farcaster.xyz, and the app's Settings → Sessions screen didn't end it either.
 - **The output is private.** It contains your DMs. The folder and each file in it are readable only by you (modes 0700 and 0600). Don't put it in git or cloud sync unless you mean to.
 
 ### 1. Copy your session token (desktop browser)

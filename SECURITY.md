@@ -27,8 +27,8 @@ For example:
 ## If you posted your token by mistake
 
 1. Delete the post or comment.
-2. Sign out of farcaster.xyz in every browser, then sign in again.
-3. Nobody yet knows whether signing out revokes a token, so treat it as exposed until it stops working. To check, run `node bin/fcx.js auth-check --fid YOUR_FID` and paste the old token. Once it is revoked, the check fails with HTTP 401.
+2. Sign out of farcaster.xyz in every browser, then sign in again. In a test this did not end a copied token, but it does no harm.
+3. Treat the token as exposed for as long as it works: there is no known way for you to revoke it. To check whether it still works, run `node bin/fcx.js auth-check --fid YOUR_FID` and paste the old token. Once it no longer works, the check fails with HTTP 401.
 
 ## Supported versions
 

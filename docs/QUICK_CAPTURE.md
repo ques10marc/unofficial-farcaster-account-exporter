@@ -35,7 +35,7 @@ Your follows and followers are also on the protocol, so they are at less risk th
 - **What the script does with it:**
   - It never writes the token to disk and never prints it.
   - At the end, it scans its own output for the token and reports how many files contain it. The number should be 0.
-- **Signing out may not revoke the token.** Nobody yet knows whether signing out of farcaster.xyz revokes it.
+- **Signing out does not revoke a copied token.** A copied token may stay valid for an unknown time after you sign out, and there is no known way for you to revoke it. In a test, it kept working after signing out of farcaster.xyz, and the app's Settings → Sessions screen didn't end it either.
 - **The output is private.** It goes to `~/FarcasterExports/`. The folder and each file in it are readable only by you (modes 0700 and 0600). It contains your DMs, so don't put it in git or cloud sync unless you mean to.
 
 ## 1. Copy your session token (desktop browser)
