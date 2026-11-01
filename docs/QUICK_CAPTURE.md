@@ -28,6 +28,7 @@ Your follows and followers are also on the protocol, so they are at less risk th
 
 ## Security (read first)
 
+- **It may stop working.** The script uses the Farcaster app's undocumented endpoints, which may stop working or be blocked at any time, and you run it under the app's current terms.
 - **The token is a password.** While it is valid, it gives full access to your account.
   - Paste it only into the script's hidden prompt, in your own terminal.
   - **Never paste it into an issue, a chat, or anywhere else.**

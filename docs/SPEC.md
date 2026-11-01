@@ -46,7 +46,7 @@ fc-export-<fid>-<UTC>/
   raw/protocol/*.pb      length-delimited protobuf Message / OnChainEvent records, signed dataBytes intact
   raw/protocol/*.jsonl   the same records as JSON
   raw/client/            verbatim API pages
-  normalized/            versioned JSON (schemaVersion 1), with JSON Schemas in normalized/schemas/
+  normalized/            versioned JSON (schemaVersion 1, experimental), with JSON Schemas in normalized/schemas/
   csv/                   following, followers, blocks, channels; bookmarks on --private runs
   media/                 index.jsonl (each URL's final status, sha256 and origin) and sha256/ (the bytes)
   reconciliation.json    differences between the protocol and the app, each with a reason code

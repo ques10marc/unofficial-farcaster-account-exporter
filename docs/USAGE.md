@@ -36,13 +36,9 @@ Public data only (no token):
 node bin/castsnap.js export --fid YOUR_FID
 ```
 
-Everything, including private data (asks for your token at a hidden prompt):
+For private data, read [Private data: your session token](#private-data-your-session-token) first.
 
-```bash
-node bin/castsnap.js export --fid YOUR_FID --private
-```
-
-Either command writes a new folder named `fc-export-` plus your FID and the time, under `~/FarcasterExports/`. The last lines print the exact folder. Check it by passing that folder to `verify`:
+Each export writes a new folder named `fc-export-` plus your FID and the time, under `~/FarcasterExports/`. The last lines print the exact folder. Check it by passing that folder to `verify`:
 
 ```bash
 node bin/castsnap.js verify PASTE_THE_FOLDER_HERE
@@ -57,6 +53,7 @@ node bin/castsnap.js verify PASTE_THE_FOLDER_HERE
 
 ### Security (read first)
 
+- **It may stop working.** `--private` uses the Farcaster app's undocumented endpoints, which may stop working or be blocked at any time, and you run it under the app's current terms.
 - **The token is a password.** While it is valid, it gives full access to your account.
   - Paste it only into `castsnap`'s hidden prompt, in your own terminal.
   - **Never paste it into an issue, a chat, or anyone else's tool.**
@@ -200,7 +197,7 @@ Other commands:
 - **`SHA256SUMS`** works with `shasum -a 256 -c SHA256SUMS`. It never lists OS metadata such as `.DS_Store`, which Finder may add later.
 - **`raw/protocol/*.pb`** are length-delimited protobuf `Message`/`OnChainEvent` records, with the signed `dataBytes` intact. **`raw/protocol/*.jsonl`** holds the same records as JSON.
 - **`raw/client/`** holds the verbatim API pages.
-- **`normalized/`** holds the JSON files, with their JSON Schemas in `normalized/schemas/`.
+- **`normalized/`** holds the JSON files, with their JSON Schemas in `normalized/schemas/`. Their format, schemaVersion 1, is experimental: a schemaVersion 2 is planned, so files and fields may change.
 - **`csv/`** holds following, followers, blocks, channels and, on `--private` runs, bookmarks. `bookmarks.csv` columns: the cast's link (`https://farcaster.xyz/<username>/<first 10 characters of the hash>`, the app's share-link form), then hash, author, timestamp, text and embeds.
 - **`media/`** holds `index.jsonl` (each URL's final status, its SHA-256, and whether it came from your casts or a bookmark) and `sha256/` with the content-addressed bytes.
 - **`reconciliation.json`** lists every difference between the protocol and the app, each with a reason code: `self_follow`, `hidden_by_client`, `client_only`, `count_mismatch` or `profile_field_mismatch`.
