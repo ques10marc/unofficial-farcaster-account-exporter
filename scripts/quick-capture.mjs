@@ -46,7 +46,9 @@ function parseArgs(argv) {
 
 // ---------- token ----------
 let TOKEN = '';
-const redact = (s) => (TOKEN ? String(s).split(TOKEN).join('[REDACTED]') : String(s));
+// The forms the token could take if it leaked, as in src/secrets.ts: verbatim, URL-encoded, base64, hex.
+const tokenForms = () => (TOKEN ? [...new Set([TOKEN, encodeURIComponent(TOKEN), Buffer.from(TOKEN).toString('base64'), Buffer.from(TOKEN).toString('hex')])] : []);
+const redact = (s) => tokenForms().reduce((out, v) => out.split(v).join('[REDACTED]'), String(s));
 // Redacted first, then cut, so a cut can never leave part of the token behind.
 const safeError = (e) => {
   const s = redact(e instanceof Error ? e.message : e);
@@ -282,7 +284,7 @@ async function main() {
   manifest.interrupted = interrupted;
 
   // Token self-scan over everything written, then checksums.
-  const scan = () => listFiles(OUT_DIR).filter((f) => TOKEN && fs.readFileSync(path.join(OUT_DIR, f), 'utf8').includes(TOKEN));
+  const scan = () => listFiles(OUT_DIR).filter((f) => { const buf = fs.readFileSync(path.join(OUT_DIR, f)); return tokenForms().some((v) => buf.includes(v)); });
   writeFile('manifest.json', JSON.stringify(manifest, null, 2) + '\n');
   const hits = scan();
   manifest.tokenSelfScan = { filesScanned: listFiles(OUT_DIR).length, filesWithToken: hits.length, ran: Boolean(TOKEN) };

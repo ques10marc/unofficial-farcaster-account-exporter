@@ -14,7 +14,7 @@ import { ClientApi, type ClientOptions } from '../src/client.ts';
 import { TransportError } from '../src/protocol/types.ts';
 import { registerSecret, safeErrorText, scanTreeForSecret } from '../src/secrets.ts';
 import { verifyExport } from '../src/verify.ts';
-import { fixture, replayExport } from './helpers.ts';
+import { fixture, replayExport, tmpDir } from './helpers.ts';
 import { mockPrivateExport } from './private-run.ts';
 import { ReplayTransport } from './replay.ts';
 
@@ -65,6 +65,28 @@ test('a server echoing the token into a saved page makes the export exit 2', asy
   const v = await verifyExport(r.dir, { env });
   assert.equal(v.checks.find((c) => c.id === 'AC-16')!.verdict, 'FAIL');
   fs.rmSync(r.dir, { recursive: true, force: true });
+});
+
+// The same, with the token echoed in base64 and in hex: castsnap's self-scan covers both forms. The output
+// folder is deleted even if an assertion fails.
+test('a server echoing the token in base64 or hex into a saved page makes the export exit 2', async () => {
+  for (const enc of ['base64', 'hex'] as const) {
+    const store = fixture('fid11-client.json');
+    const key = '/v1/user-following-channels?fid=11&limit=50';
+    const body = JSON.parse(store[key].body);
+    body.result.channels[0].description = `echo ${Buffer.from(SENTINEL).toString(enc)}`;
+    store[key].body = JSON.stringify(body);
+    const out = tmpDir('castsnap-echo-');
+    try {
+      const r = await replayExport({ env, clientStore: store, out });
+      const n = r.manifest.tokenScan.filesWithToken ?? 0;
+      assert.equal(r.exitCode, 2, enc);
+      assert.ok(n > 0, `${enc}: ${JSON.stringify(r.manifest.tokenScan)}`);
+      assert.ok(r.logs.some((l) => /^Token self-scan: [1-9]\d* file\(s\) contain the token -- DELETE THIS FOLDER and report it\.$/.test(l)), `${enc}: ${r.logs.join('\n')}`);
+    } finally {
+      fs.rmSync(out, { recursive: true, force: true });
+    }
+  }
 });
 
 // ---------- castsnap and the quick-capture script, run as child processes ----------
@@ -200,14 +222,15 @@ test('safeErrorText redacts before it truncates, so a cut never leaves part of a
 });
 
 // Replaces fetch for quick capture: every endpoint answers with empty results, except that the first
-// drafts request's body fails partway, with the token in the error.
+// drafts request's body fails partway, with the token and its base64 and hex forms in the error.
 const QUICK_BODY_FAILS = `
 let failed = false;
 globalThis.fetch = async (u) => {
   const url = new URL(String(u));
   if (url.pathname === '/v2/draft-casts' && !failed) {
     failed = true;
-    const body = new ReadableStream({ start(c) { c.enqueue(new TextEncoder().encode('{"result":')); c.error(new Error('connection reset, peer said ' + process.env.FC_SESSION_TOKEN)); } });
+    const t = process.env.FC_SESSION_TOKEN;
+    const body = new ReadableStream({ start(c) { c.enqueue(new TextEncoder().encode('{"result":')); c.error(new Error('connection reset, peer said ' + [t, Buffer.from(t).toString('base64'), Buffer.from(t).toString('hex')].join(' '))); } });
     return new Response(body, { status: 200 });
   }
   const result = { user: { fid: 11, username: 'stub' }, bookmarks: [], conversations: [], messages: [], drafts: [], mutedUsers: [], frames: [], channels: [], blockedUsers: [], users: [] };
@@ -219,9 +242,38 @@ test('quick capture: a body that fails with the token in its error is retried, a
   const r = run(QUICK, { token: true, preload: QUICK_BODY_FAILS, timeout: 60_000 });
   assert.equal(r.code, 0, r.out);
   assert.ok(!r.out.includes(SENTINEL), 'token printed');
-  assert.match(r.out, /network error, retry 1 in 2s: connection reset, peer said \[REDACTED\]/);
+  for (const enc of ['base64', 'hex'] as const) assert.ok(!r.out.includes(Buffer.from(SENTINEL).toString(enc)), `${enc} form printed`);
+  assert.match(r.out, /network error, retry 1 in 2s: connection reset, peer said \[REDACTED\] \[REDACTED\] \[REDACTED\]/);
   assert.match(r.out, /\bdrafts\s+empty\b/);
   assert.equal(scanTreeForSecret(home, SENTINEL).hits.length, 0);
+});
+
+// Replaces fetch for quick capture: every endpoint answers with empty results, except that the drafts
+// page echoes the token in one encoded form.
+const quickEcho = (enc: 'base64' | 'hex') => `
+globalThis.fetch = async (u) => {
+  const echo = Buffer.from(process.env.FC_SESSION_TOKEN).toString('${enc}');
+  const drafts = new URL(String(u)).pathname === '/v2/draft-casts' ? [{ text: 'echo ' + echo }] : [];
+  const result = { user: { fid: 11, username: 'stub' }, bookmarks: [], conversations: [], messages: [], drafts, mutedUsers: [], frames: [], channels: [], blockedUsers: [], users: [] };
+  return new Response(JSON.stringify({ result }), { status: 200, headers: { 'content-type': 'application/json' } });
+};`;
+
+// The sentinel has no characters that URL-encoding changes, so its URL-encoded form is the verbatim one.
+// Each run's new output folder is deleted even if an assertion fails, so no folder holding an encoded form
+// of the token is left in home.
+test('quick capture: a page echoing the token in base64 or hex makes it exit 2', { timeout: 150_000 }, () => {
+  const out = path.join(home, 'FarcasterExports');
+  const list = () => (fs.existsSync(out) ? fs.readdirSync(out) : []);
+  for (const enc of ['base64', 'hex'] as const) {
+    const before = new Set(list());
+    try {
+      const r = run(QUICK, { token: true, preload: quickEcho(enc), timeout: 60_000 });
+      assert.equal(r.code, 2, `${enc}: ${r.out}`);
+      assert.match(r.out, /DELETE THIS FOLDER/);
+    } finally {
+      for (const d of list()) if (!before.has(d)) fs.rmSync(path.join(out, d), { recursive: true, force: true });
+    }
+  }
 });
 
 test('the repo contains no sentinel after the runs', () => {
