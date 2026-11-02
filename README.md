@@ -8,6 +8,8 @@
 
 **Who's behind it.** Built and maintained by [@logonaut.eth](https://farcaster.xyz/logonaut.eth) (FID 4715), and tested on that account first. Announcements and links to this repository come from that account.
 
+**Official source.** castsnap is not on npm. Any npm package named castsnap is not from this project; the only official source is https://github.com/ques10marc/unofficial-farcaster-account-exporter.
+
 ## What it saves
 
 - **Public data, no sign-in needed:** your casts and replies, likes and recasts, following, followers, profile, username proofs, verifications, signers and storage, blocks, channel follows, the casts you replied to or reacted to, and the media of your own casts. Most of this is signed protocol data from public Farcaster nodes. The follow lists, blocks and channel follows are also cross-checked against the Farcaster app's public API.
@@ -51,7 +53,7 @@ In every command below, replace `YOUR_FID` with your FID.
    ```
 
    ```bash
-   npm ci
+   npm ci --ignore-scripts
    ```
 
 2. **Export your public data.** This needs no token:

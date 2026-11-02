@@ -14,7 +14,7 @@ Since the October 2026 change of ownership, the Farcaster app has banned or rest
 
 - **Node 24 or newer** (`node --version`) and **git**.
 - **Your FID.** Look it up with the command in [USAGE.md](USAGE.md#before-you-start). This works whatever your account's status in the app.
-- **Get the code and install it** (see the [README](../README.md#quick-start)): `git clone`, then `cd` into the folder, then `npm ci`.
+- **Get the code and install it** (see the [README](../README.md#quick-start)): `git clone`, then `cd` into the folder, then `npm ci --ignore-scripts`.
 
 In every command below, replace `YOUR_FID` with your FID.
 

@@ -30,6 +30,10 @@ For example:
 2. Sign out of farcaster.xyz in every browser, then sign in again. In a test this did not end a copied token, but it does no harm.
 3. Treat the token as exposed for as long as it works: there is no known way for you to revoke it. To check whether it still works, run `node bin/castsnap.js auth-check --fid YOUR_FID` and paste the old token. Once it no longer works, the check fails with HTTP 401.
 
+## Official source
+
+castsnap is not on npm. Any npm package named castsnap is not from this project; the only official source is https://github.com/ques10marc/unofficial-farcaster-account-exporter.
+
 ## Supported versions
 
 Only the latest commit on `main`.

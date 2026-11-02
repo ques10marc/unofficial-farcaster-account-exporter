@@ -54,7 +54,7 @@ Agents working in this repository: read [AGENTS.md](AGENTS.md).
 You need Node 24 or newer, and git. castsnap runs its TypeScript directly with Node's type stripping, so there is no build step.
 
 ```bash
-npm ci
+npm ci --ignore-scripts
 ```
 
 ```bash

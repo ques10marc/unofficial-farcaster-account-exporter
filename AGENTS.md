@@ -14,7 +14,7 @@ castsnap exports one Farcaster account (FID) into a new folder that is never mod
 - **Node 24 or newer.** TypeScript runs directly through Node's type stripping: there is no build step and no `dist/`.
   - Keep the syntax erasable (`erasableSyntaxOnly` in `tsconfig.json`): no enums, namespaces or parameter properties.
   - Node doesn't strip types in files under `node_modules`, so castsnap runs from a clone, not as an installed npm package.
-- **`npm ci`** installs the pinned dependencies.
+- **`npm ci --ignore-scripts`** installs the pinned dependencies without running their install scripts. castsnap needs none.
 - **`npm test`** runs every test offline, using Node's test runner on `test/**/*.test.ts`.
 - **`npm run typecheck`** runs `tsc` with `noEmit`.
 - Run both checks before you present a change.

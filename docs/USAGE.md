@@ -23,10 +23,10 @@ In every command below, replace `YOUR_FID` with your FID.
 From the project folder, install the pinned dependencies once:
 
 ```bash
-npm ci
+npm ci --ignore-scripts
 ```
 
-`npm ci` currently reports high-severity vulnerabilities (4 as of October 2026). They come from two advisories in libraries that the official `@farcaster` packages depend on: one in `@faker-js/faker`'s `helpers.fake`, which neither castsnap nor `@farcaster/core` calls, and one in `@grpc/grpc-js`'s `getAuthContext`, which castsnap never calls. npm's suggested fix is to downgrade the `@farcaster` packages to older releases, which castsnap can't do. `npm ci` may also print an `install-scripts` warning that `protobufjs` has an install script not yet covered by `allowScripts`. The script only compares version ranges in `package.json` files and is safe to run. `npm ci --ignore-scripts` skips it, with no warning, and castsnap's tests pass without it.
+`npm ci` currently reports high-severity vulnerabilities (4 as of October 2026). They come from two advisories in libraries that the official `@farcaster` packages depend on: one in `@faker-js/faker`'s `helpers.fake`, which neither castsnap nor `@farcaster/core` calls, and one in `@grpc/grpc-js`'s `getAuthContext`, which castsnap never calls. npm's suggested fix is to downgrade the `@farcaster` packages to older releases, which castsnap can't do. `--ignore-scripts` stops the dependencies' install scripts from running. castsnap needs none: the only one, in `protobufjs`, compares version ranges in `package.json` files and at most prints a warning, and castsnap's tests pass without it.
 
 **Before a full run, check your free disk space.** A large account's export, with its media, can take a few gigabytes, and your computer needs room to spare while it runs. Running out can freeze it.
 
