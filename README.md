@@ -12,7 +12,7 @@
 
 ## What it saves
 
-- **Public data, no sign-in needed:** your casts and replies, likes and recasts, following, followers, profile, username proofs, verifications, signers and storage, blocks, channel follows, the casts you replied to or reacted to, and the media of your own casts. Most of this is signed protocol data from public Farcaster nodes. The follow lists, blocks and channel follows are also cross-checked against the Farcaster app's public API.
+- **Public data, no sign-in needed:** your casts and replies, likes and recasts, following, followers, profile, username proofs, verifications, signers and storage, blocks, channel follows, the casts you replied to or reacted to, and the media of your own casts. Most of this is signed protocol data from public Farcaster nodes. The follow lists, blocks and channel follows are also cross-checked against the Farcaster app's public API. castsnap reads protocol data from the public Snapchain nodes at `snap.farcaster.xyz` and `crackle.farcaster.xyz`, so an export holds what Snapchain holds on the day you run it. Hypersnap, a fork of Snapchain, has announced it will become a separate network; once it does, anything that exists only on Hypersnap won't be in a castsnap export (see `--hub` in [USAGE](docs/USAGE.md)).
 - **Private data, with your session token (`--private`):** what exists only on the Farcaster app's servers: bookmarks, direct casts (DMs), drafts, mutes, favourite mini apps, and the media of bookmarked casts. castsnap reads them through the app's own undocumented API, which can change or stop working at any time.
 
 Each run writes a new folder under `~/FarcasterExports/` that only you can read.

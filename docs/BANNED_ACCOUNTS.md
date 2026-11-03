@@ -6,6 +6,7 @@ Since the October 2026 change of ownership, the Farcaster app has banned or rest
 
 - **Your protocol data should still be reachable.** Casts, reactions, follows, followers and your profile are signed messages stored on public Farcaster nodes, not in your app account. castsnap reads them with no sign-in. *This is expected, but not yet confirmed on a banned account.*
 - **Your bookmarks and DMs live only on the app's servers.** castsnap can reach them only with a session token that the app still accepts. Nobody yet knows whether a banned or restricted account can still sign in, or whether an existing signed-in session keeps working. Step 3 below finds out without writing anything.
+- **castsnap doesn't read your account's status in the app, and `auth-check` shows only the HTTP code, not the app's reason.** Some sites show a restricted account as `moderated_out`. If yours does, say so on the report form: castsnap has not yet been run on such an account. You can help us learn where the app says so without sharing any content: run `grep -r -l -i moderat` on your export folder and send only the file names it prints.
 - **Older DMs may already be gone.** Some conversations have disappearing-message settings, so the server deletes their older messages over time. Each export saves what is still there on that day.
 
 **Please report your result** with the **Banned or restricted account** issue form, whatever happens. Each result tells the next person what to expect.

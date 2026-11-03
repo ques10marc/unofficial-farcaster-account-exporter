@@ -214,6 +214,8 @@ Other commands:
 
 If the summary shows `Lane errors:`, one of the three lanes (protocol, client API or media) stopped early: the datasets it never reached are `error:<lane>-lane-aborted` and the run exits 1, so run the export again.
 
+`Protocol data: every node failed (…)`. Every protocol node castsnap tried failed during this run, so some or all protocol datasets are missing; `verify` shows each dataset's status. Run again later, or from another network (some networks allow only port 443). If it keeps happening, send `verify`'s output and any `marked down for this run` lines with a **Bug report**.
+
 ## What to share when you report a result
 
 - the whole `verify` output, which holds statuses and counts only: DM conversations are referred to by number, never by ID or content;
