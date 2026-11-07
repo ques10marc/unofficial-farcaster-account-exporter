@@ -1,5 +1,1 @@
 blank_issues_enabled: false
-contact_links:
-  - name: Report a security problem privately
-    url: https://github.com/ques10marc/unofficial-farcaster-account-exporter/security/advisories/new
-    about: A token or private data leaking, or another security problem. Please don't open a public issue.

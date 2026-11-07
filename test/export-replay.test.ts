@@ -16,6 +16,7 @@ const repo = path.join(import.meta.dirname, '..');
 test('replayed export of FID 11 passes every automatable check', async () => {
   const r = await replayExport();
   assert.equal(r.exitCode, 0, r.logs.join('\n'));
+  assert.ok(r.logs.some((l) => l.endsWith(`. Verify with: node bin/castsnap.js verify "${r.dir}"`)), r.logs.join('\n'));
   const m = r.manifest;
   assert.equal(m.result, 'ok');
   assert.deepEqual(Object.keys(m.datasets).sort(), Array.from({ length: 15 }, (_, i) => `D${i + 1}`).sort());

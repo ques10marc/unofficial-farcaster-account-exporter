@@ -65,17 +65,32 @@ function normalizeToken(raw) {
     .trim();
 }
 
+// One text twice over ("XX"), as when a paste is repeated because nothing appeared; as in src/secrets.ts.
+const pastedTwice = (s) => { const t = s.replace(/\x1b\[20[01]~/g, '').trim(); const half = t.length / 2; return t.length >= 2 && Number.isInteger(half) && t.slice(0, half) === t.slice(half); };
+const chars = (n) => `${n} character${n === 1 ? '' : 's'}`;
+// Input that arrives within this many ms of the prompt taking the terminal was typed or pasted before the
+// question appeared, so the terminal may have shown it: it is discarded and counted, never used.
+const EARLY_INPUT_MS = 200;
+
 function promptHidden(question) {
   const stdin = process.stdin;
   if (!stdin.isTTY) return Promise.reject(new Error('No terminal for a hidden prompt; set FC_SESSION_TOKEN instead.'));
-  process.stdout.write(question);
   return new Promise((resolve, reject) => {
     let buf = '';
-    const cleanup = () => { stdin.removeListener('data', onData); stdin.setRawMode(false); stdin.pause(); process.stdout.write('\n'); };
+    let early = 0;
+    let ready = false;
+    let timer;
+    // After Enter, only the number of characters received is shown, never the characters.
+    const finish = (err) => {
+      clearTimeout(timer); stdin.removeListener('data', onData); stdin.setRawMode(false); stdin.pause();
+      process.stdout.write(err ? '\n' : `${chars([...buf].length)} received.\n`);
+      if (err) reject(err); else resolve(buf);
+    };
     const onData = (chunk) => {
       for (const c of chunk) {
-        if (c === '\r' || c === '\n') { cleanup(); resolve(buf); return; }
-        if (c === '\u0003') { cleanup(); reject(new Error('Cancelled')); return; }
+        if (c === '\u0003') { finish(new Error('Cancelled')); return; }
+        if (!ready) { early++; continue; }
+        if (c === '\r' || c === '\n') { finish(); return; }
         if (c === '\u007f' || c === '\b') buf = buf.slice(0, -1);
         else buf += c;
       }
@@ -84,6 +99,11 @@ function promptHidden(question) {
     stdin.setEncoding('utf8');
     stdin.on('data', onData);
     stdin.resume();
+    timer = setTimeout(() => {
+      ready = true;
+      if (early) process.stdout.write(`Ignored ${chars(early)} typed or pasted before this prompt was ready. They may have been shown on screen; if that was your token, clear the terminal's scrollback.\n`);
+      process.stdout.write(question);
+    }, EARLY_INPUT_MS);
   });
 }
 
@@ -204,8 +224,10 @@ async function main() {
   if (args.help) { console.log(fs.readFileSync(new URL(import.meta.url), 'utf8').split('\n').slice(1, 11).join('\n')); return 0; }
 
   if (!args.publicOnly) {
-    TOKEN = normalizeToken(process.env.FC_SESSION_TOKEN || (await promptHidden('Paste session token (input hidden), then Enter: ')));
+    const typed = process.env.FC_SESSION_TOKEN || (await promptHidden('Paste session token (input hidden), then Enter: '));
+    TOKEN = normalizeToken(typed);
     if (!TOKEN) throw new Error('Empty token.');
+    if (pastedTwice(typed) || pastedTwice(TOKEN)) throw new Error('The token looks pasted twice (the same text two times in a row); run the command again and paste it once.');
   }
 
   // Identify the account before writing anything.
@@ -220,7 +242,9 @@ async function main() {
       me = await request('/v2/me', {}, { auth: true });
       if (me.status !== 200) args.base = primary;
     }
-    if (me.status !== 200) throw new Error(`Token check failed: /v2/me returned HTTP ${me.status}. Copy a fresh token and retry.`);
+    // A rejected token may be one pasted twice; saying so first spares a needless new sign-in.
+    const advice = me.status === 401 || me.status === 403 ? 'If you pasted more than once, run the command again and paste once. If it still fails, copy a fresh token and retry.' : 'Copy a fresh token and retry.';
+    if (me.status !== 200) throw new Error(`Token check failed: /v2/me returned HTTP ${me.status}. ${advice}`);
     const user = JSON.parse(me.text)?.result?.user;
     if (!Number.isInteger(user?.fid)) throw new Error('Unexpected /v2/me response shape (no user.fid).');
     if (args.fid && args.fid !== user.fid) throw new Error(`Token belongs to fid ${user?.fid}, not --fid ${args.fid}.`);

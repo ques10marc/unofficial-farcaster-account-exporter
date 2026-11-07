@@ -24,6 +24,7 @@ Your follows and followers are also on the protocol, so they are at less risk th
 ## Before you start
 
 - **Node 20 or newer** (`node --version`). You don't need `npm ci`.
+- **macOS or Linux.** Don't run it on native Windows for now: there it can't make its folder readable only by you, and its `SHA256SUMS` would list paths with backslashes.
 - **A desktop browser** in which you can sign in at farcaster.xyz.
 
 ## Security (read first)
@@ -37,7 +38,7 @@ Your follows and followers are also on the protocol, so they are at less risk th
   - It never writes the token to disk and never prints it.
   - At the end, it scans its own output for the token and reports how many files contain it. The number should be 0.
 - **Signing out does not revoke a copied token.** A copied token may stay valid for an unknown time after you sign out, and there is no known way for you to revoke it. In a test, it kept working after signing out of farcaster.xyz, and the app's Settings → Sessions screen didn't end it either.
-- **The output is private.** It goes to `~/FarcasterExports/`. The folder and each file in it are readable only by you (modes 0700 and 0600). It contains your DMs, so don't put it in git or cloud sync unless you mean to.
+- **The output is private on macOS and Linux.** It goes to `~/FarcasterExports/`. There, the folder and each file in it are readable only by you (modes 0700 and 0600). It contains your DMs, so don't put it in git or cloud sync unless you mean to.
 
 ## 1. Copy your session token (desktop browser)
 
@@ -49,7 +50,7 @@ Follow step 1 of "Private data" in [USAGE.md](USAGE.md#1-copy-your-session-token
 
 ## 2. Run it
 
-From the project folder, run the command below and paste the token at the hidden prompt. Nothing appears while you paste; press Enter afterwards.
+From the project folder, run the command below and paste the token once at the hidden prompt. Nothing appears while you paste; press Enter afterwards, and the script shows how many characters it received.
 
 ```bash
 node scripts/quick-capture.mjs
@@ -97,7 +98,7 @@ grep -rl "PASTE A PHRASE HERE" ~/FarcasterExports/quick-*/bookmarks/
 **Checksums (optional).** To confirm the files are intact, run the command below, using the exact folder path the script printed. Every line should end in `OK`.
 
 ```bash
-cd PASTE_THE_FOLDER_HERE && shasum -a 256 -c SHA256SUMS
+cd "PASTE_THE_FOLDER_HERE" && shasum -a 256 -c SHA256SUMS
 ```
 
 ## 4. Reporting results

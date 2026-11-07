@@ -15,7 +15,7 @@
 - **Public data, no sign-in needed:** your casts and replies, likes and recasts, following, followers, profile, username proofs, verifications, signers and storage, blocks, channel follows, the casts you replied to or reacted to, and the media of your own casts. Most of this is signed protocol data from public Farcaster nodes. The follow lists, blocks and channel follows are also cross-checked against the Farcaster app's public API. castsnap reads protocol data from the public Snapchain nodes at `snap.farcaster.xyz` and `crackle.farcaster.xyz`, so an export holds what Snapchain holds on the day you run it. Hypersnap, a fork of Snapchain, has announced it will become a separate network; once it does, anything that exists only on Hypersnap won't be in a castsnap export (see `--hub` in [USAGE](docs/USAGE.md)).
 - **Private data, with your session token (`--private`):** what exists only on the Farcaster app's servers: bookmarks, direct casts (DMs), drafts, mutes, favourite mini apps, and the media of bookmarked casts. castsnap reads them through the app's own undocumented API, which can change or stop working at any time.
 
-Each run writes a new folder under `~/FarcasterExports/` that only you can read.
+Each run writes a new folder under `~/FarcasterExports/`. On macOS and Linux, only you can read it.
 
 **The export format is experimental.** It is schemaVersion 1, and a schemaVersion 2 is planned, so files and fields may change.
 
@@ -33,7 +33,11 @@ Step by step: [docs/BANNED_ACCOUNTS.md](docs/BANNED_ACCOUNTS.md).
 
 **Before you start, you need:**
 
-- **Node 24 or newer** (`node --version`) and **git**. castsnap is developed and tested on macOS; Linux and Windows are untested.
+- **Node 24 or newer** (`node --version`) and **git**.
+- **Where castsnap has been tested:**
+  - **macOS** (Node 24): tested, including `--private`.
+  - **Linux** (Arch, Node 26): tested for public export, `verify` and the hidden token prompt (with fake tokens). The export folders are readable only by you. `--private` is untested.
+  - **Windows 11** (Node 26): public export and `verify` work, and write the same files as on Linux. castsnap can't make the folder readable only by you on Windows, so `verify`'s permissions check (AC-16) fails there. On the Windows 11 machine tested, the default folder inherited permissions that limited it to you, administrators and SYSTEM; that depends on how a machine is set up. **Don't use `--private` or the quick capture on native Windows for now.** Use Git Bash, which comes with Git for Windows: the commands in these docs work there as written. Put quotes around Windows paths.
 - **Your FID**, your account's number. To look it up from your username, run this, replacing `YOUR_USERNAME` with your username (for example `alice` or `alice.eth`), and read the `"fid"` value:
 
   ```bash
@@ -65,7 +69,7 @@ In every command below, replace `YOUR_FID` with your FID.
 3. **Check the export.** The export's last lines print its folder. Pass that folder to `verify`, which exits 0 when no check fails:
 
    ```bash
-   node bin/castsnap.js verify PASTE_THE_FOLDER_HERE
+   node bin/castsnap.js verify "PASTE_THE_FOLDER_HERE"
    ```
 
 For bookmarks, DMs and other private data, see [Private data](#private-data).
@@ -89,7 +93,7 @@ For bookmarks, DMs and other private data, see [Private data](#private-data).
 
 You need a desktop browser in which you can still sign in at farcaster.xyz. [docs/USAGE.md](docs/USAGE.md) shows how to copy your session token.
 
-1. **Check your session token.** This writes nothing. Paste the token at the hidden prompt; nothing appears while you paste.
+1. **Check your session token.** This writes nothing. Paste the token once at the hidden prompt; nothing appears while you paste.
 
    ```bash
    node bin/castsnap.js auth-check --fid YOUR_FID

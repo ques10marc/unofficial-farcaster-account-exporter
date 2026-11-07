@@ -41,10 +41,21 @@ export function normalizeToken(raw: string): string {
     .trim();
 }
 
+// True when a value is one text twice over ("XX"), as when a paste into the hidden prompt is repeated
+// because nothing appeared. Bracketed-paste markers and surrounding whitespace are ignored.
+export function pastedTwice(s: string): boolean {
+  const t = s.replace(/\x1b\[20[01]~/g, '').trim();
+  const half = t.length / 2;
+  return t.length >= 2 && Number.isInteger(half) && t.slice(0, half) === t.slice(half);
+}
+
 // A token with spaces or control characters would make fetch throw an error that quotes the header
-// value, so it is rejected up front with a message that does not include it.
-export function checkTokenShape(token: string): string | null {
+// value, so it is rejected up front with a message that does not include it. A value pasted twice is
+// refused first, before the length check, so a doubled short value gets that message. `typed` is the
+// text before normalization, so "Bearer X" pasted twice is caught too.
+export function checkTokenShape(token: string, typed = token): string | null {
   if (!token) return 'the token is empty';
+  if (pastedTwice(typed) || pastedTwice(token)) return 'the token looks pasted twice (the same text two times in a row); run the command again and paste it once';
   if (!/^[\x21-\x7e]+$/.test(token)) return 'the token contains spaces or non-printable characters; copy only the value of the authorization header';
   if (token.length < 16) return 'the token is too short to be a session token';
   return null;
@@ -57,31 +68,40 @@ export function tokenFromEnv(env: NodeJS.ProcessEnv = process.env): string | und
   return t.length ? t : undefined;
 }
 
+// Input that arrives within this many ms of the prompt taking the terminal was typed or pasted before the
+// question appeared, so the terminal may have shown it: it is discarded and counted, never used.
+export const EARLY_INPUT_MS = 200;
+const chars = (n: number) => `${n} character${n === 1 ? '' : 's'}`;
+
 // Reads one line from the terminal without echoing it. The question goes to stderr so that a redirected
-// stdout never captures the prompt.
-export function promptHidden(question: string, stdin: NodeJS.ReadStream = process.stdin, out: NodeJS.WriteStream = process.stderr): Promise<string> {
+// stdout never captures the prompt. Echo goes off first. Node can't flush or count input already waiting,
+// so whatever arrives in the first earlyMs is treated as typed before the prompt: discarded, and reported
+// by count. Only then does the question appear. After Enter, only the number of characters received is
+// shown, never the characters.
+export function promptHidden(question: string, stdin: NodeJS.ReadStream = process.stdin, out: NodeJS.WriteStream = process.stderr, earlyMs = EARLY_INPUT_MS): Promise<string> {
   if (!stdin.isTTY) return Promise.reject(new Error(`No terminal for a hidden prompt; set ${TOKEN_ENV} instead.`));
-  out.write(question);
   return new Promise((resolve, reject) => {
     let buf = '';
-    const cleanup = () => {
+    let early = 0;
+    let ready = false;
+    let timer: NodeJS.Timeout | undefined;
+    const finish = (err?: Error) => {
+      clearTimeout(timer);
       stdin.removeListener('data', onData);
       stdin.setRawMode(false);
       stdin.pause();
-      out.write('\n');
+      out.write(err ? '\n' : `${chars([...buf].length)} received.\n`);
+      if (err) reject(err);
+      else resolve(buf);
     };
     const onData = (chunk: string) => {
       for (const c of chunk) {
-        if (c === '\r' || c === '\n') {
-          cleanup();
-          resolve(buf);
-          return;
+        if (c === '\u0003') return finish(new Error('Cancelled'));
+        if (!ready) {
+          early++;
+          continue;
         }
-        if (c === '\u0003') {
-          cleanup();
-          reject(new Error('Cancelled'));
-          return;
-        }
+        if (c === '\r' || c === '\n') return finish();
         if (c === '\u007f' || c === '\b') buf = buf.slice(0, -1);
         else buf += c;
       }
@@ -90,6 +110,11 @@ export function promptHidden(question: string, stdin: NodeJS.ReadStream = proces
     stdin.setEncoding('utf8');
     stdin.on('data', onData);
     stdin.resume();
+    timer = setTimeout(() => {
+      ready = true;
+      if (early) out.write(`Ignored ${chars(early)} typed or pasted before this prompt was ready. They may have been shown on screen; if that was your token, clear the terminal's scrollback.\n`);
+      out.write(question);
+    }, earlyMs);
   });
 }
 
@@ -97,12 +122,13 @@ export function promptHidden(question: string, stdin: NodeJS.ReadStream = proces
 // checked, so even a shape error cannot echo it.
 export async function readSessionToken(opts: { env?: NodeJS.ProcessEnv; prompt?: () => Promise<string> } = {}): Promise<{ token: string; from: 'env' | 'prompt' }> {
   const env = tokenFromEnv(opts.env);
-  const raw = env ?? normalizeToken(await (opts.prompt ?? (() => promptHidden('Paste session token (input hidden), then Enter: ')))());
+  const typed = env ?? (await (opts.prompt ?? (() => promptHidden('Paste session token (input hidden), then Enter: ')))());
+  const raw = env ?? normalizeToken(typed);
   // A value pasted with a stray space is refused below; its parts are registered too, so an echo of
   // either half is still redacted.
   registerSecret(raw);
   for (const part of raw.split(/\s+/)) if (part.length >= 8) registerSecret(part);
-  const problem = checkTokenShape(raw);
+  const problem = checkTokenShape(raw, typed);
   if (problem) throw new Error(`Session token not usable: ${problem}.`);
   return { token: raw, from: env ? 'env' : 'prompt' };
 }

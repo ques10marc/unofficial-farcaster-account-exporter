@@ -3,11 +3,13 @@
 import os from 'node:os';
 import path from 'node:path';
 import { ClientApi, CLIENT_BASES } from './client.ts';
-import { AuthCheckError, parseMediaScope, runExport } from './export.ts';
 import { findInExport, formatHits } from './find.ts';
+import { parseMediaScope } from './media.ts';
 import { normalizeBase, readSessionToken, redactRegistered, TOKEN_HOSTS, tokenHostAllowed } from './secrets.ts';
 import { interrupt, VERSION } from './util.ts';
-import { formatChecks, verifyExport } from './verify.ts';
+// export.ts and verify.ts load the protocol libraries (@farcaster/core, @farcaster/hub-nodejs, ajv),
+// which can take seconds on a first run. They are imported where they are used, after the token prompt,
+// so the prompt appears without that wait.
 
 const USAGE = `castsnap ${VERSION} - export a verifiable snapshot of one Farcaster account
 
@@ -92,6 +94,7 @@ export async function main(argv: string[]): Promise<number> {
   if (cmd === 'export') {
     const o = parseFlags(rest, new Set(['--fid', '--out', '--media', '--hub', '--base', '--private']));
     const token = o.private ? (await getToken()).token : undefined;
+    const { AuthCheckError, runExport } = await import('./export.ts');
     process.on('SIGINT', () => {
       if (interrupt.requested) process.exit(130);
       interrupt.requested = true;
@@ -119,6 +122,7 @@ export async function main(argv: string[]): Promise<number> {
   if (cmd === 'verify') {
     const dir = rest.find((a) => !a.startsWith('--'));
     if (!dir) throw new UsageError('verify needs a directory');
+    const { formatChecks, verifyExport } = await import('./verify.ts');
     const r = await verifyExport(dir, { progress: (s) => console.error(s) });
     if (rest.includes('--json')) console.log(JSON.stringify(r.checks, null, 2));
     else console.log(formatChecks(path.resolve(dir), r.checks));

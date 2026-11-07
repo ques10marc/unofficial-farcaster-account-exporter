@@ -19,7 +19,7 @@ import {
 import { type AuthCheck, ClientApi, CLIENT_BASES } from './client.ts';
 import { toCsv } from './csv.ts';
 import { FARCASTER_EPOCH_S, type KeyTarget, KeyMessageSearch, keyOf, messageData, SEARCH_LIMITS, shortKey } from './gasless.ts';
-import { downloadMedia, type MediaIndexRow, type MediaOrigin, type MediaRef, mediaStats, type MediaStats, type Resolver } from './media.ts';
+import { downloadMedia, type MediaIndexRow, type MediaOrigin, type MediaRef, mediaStats, type MediaStats, parseMediaScope, type Resolver } from './media.ts';
 import {
   bookmarkMediaUrls,
   type BookmarkRecord,
@@ -152,13 +152,6 @@ export class AuthCheckError extends Error {
     this.name = 'AuthCheckError';
     this.check = check;
   }
-}
-
-export function parseMediaScope(v: string): { own: boolean; bookmarks: boolean } | null {
-  if (v === 'none') return { own: false, bookmarks: false };
-  const parts = v.split(',').map((x) => x.trim());
-  if (!parts.length || parts.some((x) => x !== 'own' && x !== 'bookmarks')) return null;
-  return { own: parts.includes('own'), bookmarks: parts.includes('bookmarks') };
 }
 
 const NOT_REQUESTED = 'unavailable:private-not-requested';
@@ -1065,7 +1058,7 @@ export async function runExport(opts: ExportOptions): Promise<ExportResult> {
     log(`Lane errors: ${laneErrors.join('; ')}.${notFetched.size ? ` Not fetched: ${[...notFetched].join(', ')}.` : ''}`);
     log(`Result: ${manifest.result} (exit ${exitCode}). Re-run the export; see docs/USAGE.md.`);
   }
-  log(`Files: ${files} (+SHA256SUMS). Verify with: castsnap verify "${writer.root}"`);
+  log(`Files: ${files} (+SHA256SUMS). Verify with: node bin/castsnap.js verify "${writer.root}"`);
   if (transports.length && transports.every((t) => down.has(t))) {
     log(`Protocol data: every node failed (${transports.map((t) => t.label).join(', ')}). castsnap falls back only between Farcaster's own Snapchain nodes, which answer only on ports 3383 and 3381, so a network that allows only web traffic (port 443) cannot reach them. Run again later or from another network, or see --hub in docs/USAGE.md.`);
   }

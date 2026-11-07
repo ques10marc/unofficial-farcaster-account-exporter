@@ -25,6 +25,15 @@ const TIMEOUT_MS = 60_000;
 const PER_HOST_GAP_MS = 250;
 const MAX_REDIRECTS = 5;
 
+// --media: which casts' media to download (own, bookmarks, own,bookmarks or none). It lives here, not in
+// export.ts, so the command line can check the flag without loading the protocol libraries.
+export function parseMediaScope(v: string): { own: boolean; bookmarks: boolean } | null {
+  if (v === 'none') return { own: false, bookmarks: false };
+  const parts = v.split(',').map((x) => x.trim());
+  if (!parts.length || parts.some((x) => x !== 'own' && x !== 'bookmarks')) return null;
+  return { own: parts.includes('own'), bookmarks: parts.includes('bookmarks') };
+}
+
 export type MediaOrigin = 'own' | 'bookmark';
 
 export interface MediaRef {

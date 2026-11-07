@@ -190,7 +190,11 @@ export class ClientApi {
       if (!(last.status === 0 || last.status === 401 || last.status === 403 || last.status === 404 || last.status >= 500)) break;
     }
     const tried = attempts.map((a) => `${a.status ? `HTTP ${a.status}` : `no response (${a.error ?? 'unknown error'})`} at ${a.base}`).join(', ');
-    if (!last || last.status !== 200) return { ok: false, status: last?.status ?? 0, base, attempts, message: `Token check failed: /v2/me returned ${tried}. Copy a fresh token and retry.` };
+    // A rejected token may be one pasted twice into the hidden prompt; saying so first spares a needless
+    // new sign-in.
+    const rejected = attempts.some((a) => a.status === 401 || a.status === 403);
+    const advice = rejected ? 'If you pasted more than once, run the command again and paste once. If it still fails, copy a fresh token and retry.' : 'Copy a fresh token and retry.';
+    if (!last || last.status !== 200) return { ok: false, status: last?.status ?? 0, base, attempts, message: `Token check failed: /v2/me returned ${tried}. ${advice}` };
     let user: { fid?: unknown; username?: unknown } | undefined;
     try {
       user = JSON.parse(last.text)?.result?.user;

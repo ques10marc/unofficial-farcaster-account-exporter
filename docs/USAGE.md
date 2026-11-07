@@ -41,7 +41,7 @@ For private data, read [Private data: your session token](#private-data-your-ses
 Each export writes a new folder named `fc-export-` plus your FID and the time, under `~/FarcasterExports/`. The last lines print the exact folder. Check it by passing that folder to `verify`:
 
 ```bash
-node bin/castsnap.js verify PASTE_THE_FOLDER_HERE
+node bin/castsnap.js verify "PASTE_THE_FOLDER_HERE"
 ```
 
 **What `verify` reports:**
@@ -64,7 +64,7 @@ node bin/castsnap.js verify PASTE_THE_FOLDER_HERE
   - Before writing anything, it checks with `/v2/me` that the token belongs to `--fid`. If it doesn't, or the token is rejected, the run stops and no folder is created.
   - At the end, it scans its own output for the token and prints `Token self-scan: N file(s) contain the token.` N should be 0. If it isn't, the run exits with code 2: delete that folder.
 - **Signing out does not revoke a copied token.** A copied token may stay valid for an unknown time after you sign out, and there is no known way for you to revoke it. In a test, it kept working after signing out of farcaster.xyz, and the app's Settings → Sessions screen didn't end it either.
-- **The output is private.** It contains your DMs. The folder and each file in it are readable only by you (modes 0700 and 0600). Don't put it in git or cloud sync unless you mean to.
+- **The output is private on macOS and Linux.** It contains your DMs. There, the folder and each file in it are readable only by you (modes 0700 and 0600). castsnap can't set that on Windows, so don't use `--private` on native Windows for now. Don't put the output in git or cloud sync unless you mean to.
 
 ### 1. Copy your session token (desktop browser)
 
@@ -84,11 +84,11 @@ If no `~api` request has an `authorization` header, stop and open a **Bug report
 node bin/castsnap.js auth-check --fid YOUR_FID
 ```
 
-Paste the token at the prompt; nothing appears while you paste. Press Enter. It prints one line:
+Paste the token once at the prompt; nothing appears while you paste. Press Enter. It shows how many characters it received, then prints one line:
 
 - `auth-check: OK. Token accepted by https://client.farcaster.xyz; it belongs to fid …, which matches --fid ….` Good: go on.
 - `… belongs to fid N, not --fid ….` You are signed in to a different account in that browser.
-- `Token check failed: /v2/me returned HTTP 401 …`, or another HTTP code. Both hosts rejected the token. Copy a fresh one. If your account is banned or restricted, see [BANNED_ACCOUNTS.md](BANNED_ACCOUNTS.md).
+- `Token check failed: /v2/me returned HTTP 401 …`, or another HTTP code. Both hosts rejected the token. If you pasted it more than once, run the command again and paste it once; otherwise copy a fresh one. If your account is banned or restricted, see [BANNED_ACCOUNTS.md](BANNED_ACCOUNTS.md).
 
 ### 3. Run the export
 
@@ -163,7 +163,7 @@ Every successful response is saved verbatim under `raw/client/`. Error responses
 3. Run the command below for each phrase. The check passes when each of the 5 prints at least one line starting with `bookmarks`.
 
 ```bash
-node bin/castsnap.js find PASTE_THE_FOLDER_HERE "PASTE A PHRASE HERE"
+node bin/castsnap.js find "PASTE_THE_FOLDER_HERE" "PASTE A PHRASE HERE"
 ```
 
 **Direct casts, 3 of 3** (`verify` labels this AC-18):

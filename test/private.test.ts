@@ -105,10 +105,20 @@ test('auth-check: 401 on the first host falls back to the ~api host; an explicit
       const x = await explicit.authCheck(11);
       assert.equal(x.ok, false);
       assert.match(x.message, new RegExp(`Token check failed: /v2/me returned HTTP ${status} at`));
+      // Pasting twice comes before a fresh token, which means signing in again.
+      assert.match(x.message, /\. If you pasted more than once, run the command again and paste once\. If it still fails, copy a fresh token and retry\.$/);
       assert.equal(x.attempts.length, 1);
     } finally {
       await mock.close();
     }
+  }
+  // Control: a failure that isn't a rejected token keeps the plain advice. 404 is not retried.
+  const m404 = await startMock({ token: t, rejectPrefixes: { primary: 404 } });
+  try {
+    const x = await new ClientApi({ token: t, bases: [`${m404.url}/primary`], explicitBase: true, privateLimiter: noLimit() }).authCheck(11);
+    assert.equal(x.message, `Token check failed: /v2/me returned HTTP 404 at ${m404.url}/primary. Copy a fresh token and retry.`);
+  } finally {
+    await m404.close();
   }
 });
 
