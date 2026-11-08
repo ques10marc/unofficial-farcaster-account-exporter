@@ -25,7 +25,7 @@ import { mockPrivateExport } from './private-run.ts';
 const repo = path.join(import.meta.dirname, '..');
 const sentinel = () => `castsnap-sentinel-${randomUUID()}`;
 const noLimit = () => new RateLimiter({ windows: [] });
-const PRIVATE_PATHS = ['/v2/me', '/v2/bookmarked-casts', '/v2/direct-cast-conversation-list', '/v2/direct-cast-conversation-messages', '/v2/draft-casts', '/v2/get-muted-keywords', '/v2/get-muted-users', '/v2/get-muted-channels', '/v1/favorite-frames'];
+const PRIVATE_PATHS = ['/v2/me', '/v2/bookmarked-casts', '/v2/direct-cast-conversation-list', '/v2/direct-cast-conversation-messages', '/v2/draft-casts', '/v2/get-muted-keywords', '/v2/get-muted-users', '/v2/get-muted-channels', '/v1/favorite-frames', '/v2/network-code/public-rap-sheet', '/v2/opt-in/following-stayed'];
 const verdicts = (checks: { id: string; verdict: string }[]) => Object.fromEntries(checks.map((c) => [c.id, c.verdict]));
 const exportDirs = (out: string) => (fs.existsSync(out) ? fs.readdirSync(out).filter((f) => f.startsWith('fc-export-')) : []);
 

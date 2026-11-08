@@ -42,9 +42,14 @@ export interface MockOptions {
   // Paths (public or private) whose first N responses send the headers and half the body, then drop the
   // connection: a network that fails mid-response. Infinity drops every response.
   dropBody?: Record<string, number>;
+  // The own moderation record and the stayed list, whose real shapes are unknown: each answer's status
+  // (default 200) and body, page by page. The mock adds next.cursor to every 200 page but the last.
+  // Unset: 404, as an app without the endpoint would answer.
+  ownRecord?: { status?: number; body: unknown }[];
+  stayed?: { status?: number; body: unknown };
 }
 
-const PRIVATE_PATHS = new Set(['/v2/me', '/v2/bookmarked-casts', '/v2/direct-cast-conversation-list', '/v2/direct-cast-conversation-messages', '/v2/draft-casts', '/v2/get-muted-keywords', '/v2/get-muted-users', '/v2/get-muted-channels', '/v1/favorite-frames']);
+const PRIVATE_PATHS = new Set(['/v2/me', '/v2/bookmarked-casts', '/v2/direct-cast-conversation-list', '/v2/direct-cast-conversation-messages', '/v2/draft-casts', '/v2/get-muted-keywords', '/v2/get-muted-users', '/v2/get-muted-channels', '/v1/favorite-frames', '/v2/network-code/public-rap-sheet', '/v2/opt-in/following-stayed']);
 
 // Maximum page sizes: types.yml declares 100 for bookmarks; 50 is what quick-capture used for the others.
 // Muted users take at most 15 here so the "400 on the first page, retry with a smaller limit" path runs.
@@ -106,6 +111,15 @@ export async function startMock(opts: MockOptions): Promise<{ url: string; reque
       return send(429, { errors: [{ message: 'slow down' }] }, { 'retry-after': '1' });
     }
 
+    if (path === '/v2/network-code/public-rap-sheet' || path === '/v2/opt-in/following-stayed') {
+      const answers = path === '/v2/opt-in/following-stayed' ? (opts.stayed ? [opts.stayed] : []) : (opts.ownRecord ?? []);
+      const i = query.cursor === undefined ? 0 : decCursor(query.cursor);
+      const a = i === null ? undefined : answers[i];
+      if (i === null || !a) return send(404, { errors: [{ message: 'not found' }] });
+      const status = a.status ?? 200;
+      const more = status === 200 && i + 1 < answers.length && a.body !== null && typeof a.body === 'object';
+      return send(status, more ? { ...(a.body as Obj), next: { cursor: encCursor(i + 1) } } : a.body);
+    }
     if (path === '/v2/me') return send(200, data.me);
     if (path === '/v2/get-muted-keywords') return send(200, { success: true, result: data.mutedKeywords });
     if (path === '/v2/get-muted-channels') return send(200, { success: true, result: { mutedChannels: data.mutedChannels } });

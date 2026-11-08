@@ -59,6 +59,12 @@ body:
         - Didn't run
     validations:
       required: true
+  - type: input
+    id: account-status
+    attributes:
+      label: The Account status line (optional)
+      description: Printed near the end of an export, and by auth-check. It holds the app's status for your account, not your FID.
+      placeholder: "Account status: optInStatus=… publicSpamLabel=… (from profile-after)"
   - type: dropdown
     id: private-export
     attributes:

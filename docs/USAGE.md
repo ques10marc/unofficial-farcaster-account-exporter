@@ -84,9 +84,10 @@ If no `~api` request has an `authorization` header, stop and open a **Bug report
 node bin/castsnap.js auth-check --fid YOUR_FID
 ```
 
-At the prompt, paste the token once, then press Enter; nothing appears while you paste. It shows how many characters it received, then prints one line:
+At the prompt, paste the token once, then press Enter; nothing appears while you paste. It shows how many characters it received, then prints one line, and the account status when the token is accepted:
 
 - `auth-check: OK. Token accepted by https://client.farcaster.xyz; it belongs to fid …, which matches --fid ….` Good: go on.
+- Then `Account status: optInStatus=… (from /v2/me)`: your account's status as the app reports it. See [Account status](#account-status).
 - `… belongs to fid N, not --fid ….` You are signed in to a different account in that browser.
 - `Token check failed: /v2/me returned HTTP 401 …`, or another HTTP code. Both hosts rejected the token. If you pasted it more than once, run the command again and paste it once; otherwise copy a fresh one. If your account is banned or restricted, see [BANNED_ACCOUNTS.md](BANNED_ACCOUNTS.md).
 
@@ -136,9 +137,13 @@ The paths, result keys and page sizes come from the official client's `types.yml
 | D11 drafts | `GET /v2/draft-casts` | `normalized/drafts.json` |
 | D12 mutes | `GET /v2/get-muted-keywords`, `/v2/get-muted-users`, `/v2/get-muted-channels` | `normalized/muted-keywords.json`, `muted-users.json`, `muted-channels.json` |
 | D13 mini apps | `GET /v1/favorite-frames` | `normalized/mini-apps.json` |
+| D19 own moderation record | `GET /v2/network-code/public-rap-sheet?fid=<your FID>`, 20 per page, as the app asks for it | `raw/client/moderation-record/`, as it came; not normalized |
+| D20 stayed list | `GET /v2/opt-in/following-stayed`, one request | `raw/client/following-stayed/`, as it came; not normalized |
 | D14 media | every embed URL of your casts and your bookmarked casts | `media/index.jsonl`, `media/sha256/` |
 
 Every successful response is saved verbatim under `raw/client/`. Error responses are saved truncated, with the token redacted, as `error-NNNN.json`.
+
+D19 and D20 are not in `types.yml`: their paths and page size come from the web app's own code (2026-11). Their answers' shapes aren't documented, so castsnap keeps the pages as they came and counts the entries where it can. A refusal is the dataset's status, for example `unavailable:403`, or `unavailable:no-result` for an answer without a result. D19 and D20 never make the export fail.
 
 ### How long it takes
 
@@ -193,7 +198,7 @@ Other commands:
 
 ## Output
 
-- **`manifest.json`** holds every source's host, pages, final-cursor state and status, plus the status of each dataset D1–D15. A `--private` run also records the token check (`authCheck`: the host and FID, never the token) and one entry per DM conversation (`directCasts`).
+- **`manifest.json`** holds every source's host, pages, final-cursor state and status, plus the status of each dataset D1–D15, D19 and D20, and the account status (`accountStatus`; see [Account status](#account-status)). A `--private` run also records the token check (`authCheck`: the host and FID, never the token) and one entry per DM conversation (`directCasts`).
 - **`SHA256SUMS`** works with `shasum -a 256 -c SHA256SUMS`. It never lists OS metadata such as `.DS_Store`, which Finder may add later.
 - **`raw/protocol/*.pb`** are length-delimited protobuf `Message`/`OnChainEvent` records, with the signed `dataBytes` intact. **`raw/protocol/*.jsonl`** holds the same records as JSON.
 - **`raw/client/`** holds the verbatim API pages.
@@ -201,6 +206,21 @@ Other commands:
 - **`csv/`** holds following, followers, blocks, channels and, on `--private` runs, bookmarks. `bookmarks.csv` columns: the cast's link (`https://farcaster.xyz/<username>/<first 10 characters of the hash>`, the app's share-link form), then hash, author, timestamp, text and embeds.
 - **`media/`** holds `index.jsonl` (each URL's final status, its SHA-256, and whether it came from your casts or a bookmark) and `sha256/` with the content-addressed bytes.
 - **`reconciliation.json`** lists every difference between the protocol and the app, each with a reason code: `self_follow`, `hidden_by_client`, `client_only`, `count_mismatch` or `profile_field_mismatch`.
+
+### Account status
+
+Every export prints one line just before `Files:`, and `auth-check` prints it after its `OK` line:
+
+```
+Account status: optInStatus=pending publicSpamLabel="2 (unlikely to engage in spammy behavior)" (from profile-after)
+```
+
+- **`optInStatus`** is what the app reports for your account. The app's code checks for `pending` and `moderated_out`, and `opted_in` is the third value reported. As far as is known, `pending` means you haven't accepted the Network Code (a No vote reads the same), and `moderated_out` means the app has restricted the account.
+- **`publicSpamLabel`** is the app's public spam label for the account. `/v2/me` doesn't carry it, so `auth-check`'s line leaves it out.
+- **`nerfed=true`** appears only when the app reports it. The app describes a nerfed account as one that can still post to the protocol but doesn't appear in the Farcaster app.
+- **`(not reported)`** means the answer had no such field, and **`not available`** means castsnap got no readable profile.
+
+The line comes from the profile the export fetched last. `manifest.json` keeps every value under `accountStatus`, and a `--private` run adds what `/v2/me` reports, including `neynarScore` and `enabledFeatureFlags`. castsnap copies these values as the app sent them; what they mean may change. The line itself is safe to share.
 
 **Exit codes:**
 
@@ -220,6 +240,7 @@ If the summary shows `Lane errors:`, one of the three lanes (protocol, client AP
 
 - the whole `verify` output, which holds statuses and counts only: DM conversations are referred to by number, never by ID or content;
 - the `Token self-scan` lines;
+- the `Account status:` line;
 - your manual check results: bookmarks as N of 5, and direct casts as N of 3.
 
 Replace your home folder path with `~`. Never share the token, file contents or `find` output.

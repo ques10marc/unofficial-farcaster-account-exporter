@@ -6,6 +6,7 @@ import { ClientApi, CLIENT_BASES } from './client.ts';
 import { findInExport, formatHits } from './find.ts';
 import { parseMediaScope } from './media.ts';
 import { normalizeBase, readSessionToken, redactRegistered, TOKEN_HOSTS, tokenHostAllowed } from './secrets.ts';
+import { statusFromMe, statusLine } from './status.ts';
 import { interrupt, VERSION } from './util.ts';
 // export.ts and verify.ts load the protocol libraries (@farcaster/core, @farcaster/hub-nodejs, ajv),
 // which can take seconds on a first run. They are imported where they are used, after the token prompt,
@@ -22,7 +23,8 @@ Usage:
 export      Protocol data (gRPC ${'snap.farcaster.xyz:3383'}, falling back only to Farcaster's own Snapchain
             nodes) and client data.
             --out      parent directory for the new export (default ~/FarcasterExports)
-            --private  also export bookmarks, direct casts, drafts, mutes and favourite mini apps,
+            --private  also export bookmarks, direct casts, drafts, mutes, favourite mini apps, and
+                       your own moderation record and stayed list as the app shows them,
                        using your web session token (hidden prompt, or FC_SESSION_TOKEN). The token is
                        checked against --fid before anything is written.
             --media    which casts' media to download (default own,bookmarks; bookmarks needs --private)
@@ -30,7 +32,7 @@ export      Protocol data (gRPC ${'snap.farcaster.xyz:3383'}, falling back only 
                        snap.farcaster.xyz and crackle.farcaster.xyz get no fallback
             --base     client API host (default ${CLIENT_BASES[0]}, falling back to ${CLIENT_BASES[1]});
                        only ${TOKEN_HOSTS.join(' or ')}, or a loopback address for testing
-auth-check  Confirm the session token belongs to --fid (GET /v2/me). Writes nothing.
+auth-check  Confirm the session token belongs to --fid (GET /v2/me), and show the account status it reports. Writes nothing.
 verify      Offline checks: checksums, signatures, schemas, CSVs, counts, acceptance criteria.
 find        Search an export's normalized data (text, hash prefix, fid, username).
 
@@ -53,6 +55,14 @@ const getToken = () =>
   });
 
 const DEFAULT_MEDIA = 'own,bookmarks';
+
+const parseOrUndefined = (s?: string): unknown => {
+  try {
+    return s === undefined ? undefined : JSON.parse(s);
+  } catch {
+    return undefined;
+  }
+};
 
 function parseFlags(argv: string[], allowed: Set<string>) {
   const o: { fid?: number; out: string; media: string; hub?: string; base?: string; private: boolean } = { out: path.join(os.homedir(), 'FarcasterExports'), media: DEFAULT_MEDIA, private: false };
@@ -117,6 +127,8 @@ export async function main(argv: string[]): Promise<number> {
     const client = new ClientApi({ token, bases: o.base ? [o.base] : CLIENT_BASES, explicitBase: Boolean(o.base) });
     const r = await client.authCheck(o.fid);
     console.log(redactRegistered(`auth-check: ${r.ok ? 'OK' : 'FAILED'}. ${r.message}${r.ok ? '' : ' Nothing was written.'}`));
+    // The account's status as /v2/me reports it; /v2/me has no publicSpamLabel, an export's line has it.
+    if (r.ok) console.log(redactRegistered(statusLine(statusFromMe(parseOrUndefined(r.text)), '/v2/me')));
     return r.ok ? 0 : 1;
   }
   if (cmd === 'verify') {

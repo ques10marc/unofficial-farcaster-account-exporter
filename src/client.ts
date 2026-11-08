@@ -16,6 +16,15 @@ const TIMEOUT_MS = 30_000;
 // Network errors (no response, or a body that fails mid-read) are retried with waits of 2, 4, 8, 16, 32
 // and then 60 s: about 5 minutes in all, enough to ride out a Wi-Fi reconnect.
 const NETWORK_ATTEMPTS = 10;
+// The first error message of an error body, for a note: "errors[0].message: …", at most 200 characters.
+const firstError = (text: string): string | undefined => {
+  try {
+    const m = JSON.parse(text)?.errors?.[0]?.message;
+    return typeof m === 'string' ? `errors[0].message: ${m.slice(0, 200)}` : undefined;
+  } catch {
+    return undefined;
+  }
+};
 
 export interface ClientResponse {
   status: number;
@@ -32,6 +41,17 @@ export interface ClientPaged {
   lastCursorEmpty: boolean;
   limitUsed?: number;
   errorBody?: string;
+}
+
+// Pages of an endpoint whose answer shape is not documented (pagesRaw).
+export interface RawPages {
+  status: string; // complete | unavailable:<code> | unavailable:no-result | unavailable:non-json | error:<reason> | interrupted
+  base: string;
+  pages: string[]; // verbatim 200 bodies that carried a result
+  bodies: unknown[]; // the same, parsed
+  lastCursorEmpty: boolean;
+  errorBody?: string;
+  note?: string;
 }
 
 export interface ClientOptions {
@@ -255,6 +275,59 @@ export class ClientApi {
       }
       seen.add(next);
       cursor = next;
+    }
+    out.status = 'interrupted';
+    return out;
+  }
+
+  // Pages of an endpoint whose answer shape is not documented (the own moderation record, the stayed
+  // list), always with the token: limit + cursor while next.cursor is new, at most maxPages pages. An
+  // answer without a result object stops with unavailable:no-result, so a refusal sent with HTTP 200 is
+  // never taken for an empty list. Counting is the caller's.
+  async pagesRaw(path: string, params: Record<string, string | number>, o: { limit?: number; maxPages: number }): Promise<RawPages> {
+    const out: RawPages = { status: 'error:not-started', base: this.base, pages: [], bodies: [], lastCursorEmpty: false };
+    const seen = new Set<string>();
+    let after: string | undefined;
+    while (!interrupt.requested) {
+      const q = { ...params, limit: o.limit, cursor: after };
+      const r = out.pages.length === 0 ? await this.getWithFallback(path, q, { auth: true }) : await this.get(path, q, { auth: true });
+      out.base = this.base;
+      if (r.status !== 200) {
+        out.status = r.status === 0 ? `error:network:${r.error}` : `unavailable:${r.status}`;
+        if (r.text) out.errorBody = r.text.slice(0, 2000);
+        out.note = firstError(r.text);
+        return out;
+      }
+      let body: { result?: unknown; next?: { cursor?: unknown } } | null = null;
+      try {
+        body = JSON.parse(r.text);
+      } catch {}
+      if (!body || typeof body !== 'object' || body.result === undefined || body.result === null) {
+        out.status = body && typeof body === 'object' ? 'unavailable:no-result' : 'unavailable:non-json';
+        out.errorBody = r.text.slice(0, 2000);
+        out.note = firstError(r.text);
+        return out;
+      }
+      out.pages.push(r.text);
+      out.bodies.push(body);
+      const c = body.next?.cursor;
+      const next = typeof c === 'string' && c ? c : undefined;
+      if (!next) {
+        out.lastCursorEmpty = true;
+        out.status = 'complete';
+        return out;
+      }
+      if (seen.has(next)) {
+        out.status = 'error:cursor-loop';
+        return out;
+      }
+      if (out.pages.length >= o.maxPages) {
+        out.status = 'complete';
+        out.note = `stopped after ${out.pages.length} page${out.pages.length === 1 ? '' : 's'}; next.cursor not followed`;
+        return out;
+      }
+      seen.add(next);
+      after = next;
     }
     out.status = 'interrupted';
     return out;

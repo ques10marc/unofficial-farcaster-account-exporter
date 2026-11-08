@@ -1,5 +1,7 @@
-// Private client data (--private): bookmarks (D3), direct casts (D10), drafts (D11), mutes (D12) and
-// favourite mini apps (D13). Paths, result keys and page sizes come from the official client's types.yml
+// Private client data (--private): bookmarks (D3), direct casts (D10), drafts (D11), mutes (D12),
+// favourite mini apps (D13), and the own moderation record (D19) and stayed list (D20). The paths and
+// page size of D19 and D20 come from the web app's own code (2026-11); the others' paths, result keys
+// and page sizes come from the official client's types.yml
 // (snapshot 2026-09-30, commit 0c289ed). A quick-capture run fetched every one of them with a web session
 // token alone; direct casts needed no separate dc_auth token.
 //
@@ -8,6 +10,7 @@
 // auth, which only sends it to the allowed client hosts.
 
 import type { SourceEntry } from './export.ts';
+import { countEntries, stayedCount } from './status.ts';
 
 export const DM_CATEGORIES = ['default', 'archived', 'request', 'void'] as const;
 
@@ -27,6 +30,12 @@ export interface CaptureHelpers {
   paged(o: { name: string; dir?: string; path: string; params: Record<string, string | number>; itemsKey: string; limit: number; register?: boolean }): Promise<PagedCapture>;
   // count: number of items in the body; 0 makes the source 'empty' rather than 'complete'.
   object(o: { name: string; path: string; params: Record<string, string | number>; count: (body: unknown) => number }): Promise<ObjectCapture>;
+  // An endpoint whose answer shape is not documented (D19, D20): the pages kept as they came and
+  // counted by count. Whatever the answer, a refusal included, it never makes the export an error.
+  raw(o: { name: string; path: string; params: Record<string, string | number>; limit?: number; maxPages: number; count: (bodies: unknown[]) => number | null }): Promise<{ entry: SourceEntry; count: number | null }>;
+  // The FID /v2/me returned for the token. The token check has already stopped any run where it differs
+  // from --fid, so the own-record request asks only about the token's own account.
+  ownFid: number;
   register(name: string, entry: SourceEntry): void;
   log(s: string): void;
   isInterrupted(): boolean;
@@ -55,6 +64,9 @@ export interface PrivateData {
   mutedUsers: unknown[];
   mutedChannels: unknown[] | null; // ApiMutedChannelsResult.mutedChannels; null when not fetched
   miniApps: unknown[];
+  // D19 and D20: entries counted; null when not counted or not fetched.
+  moderationRecord: number | null;
+  stayed: number | null;
 }
 
 // ApiMutedKeywordsResult has keywords (strings, which types.yml calls not extensible) and mutedKeywords
@@ -72,7 +84,7 @@ const done = (s: string) => s === 'complete' || s === 'empty';
 const pad = (n: number) => String(n).padStart(4, '0');
 export const safeName = (s: string): string => s.replace(/[^A-Za-z0-9._-]/g, '_');
 
-export const emptyPrivateData = (): PrivateData => ({ bookmarks: [], conversations: [], drafts: [], mutedKeywords: null, mutedUsers: [], mutedChannels: null, miniApps: [] });
+export const emptyPrivateData = (): PrivateData => ({ bookmarks: [], conversations: [], drafts: [], mutedKeywords: null, mutedUsers: [], mutedChannels: null, miniApps: [], moderationRecord: null, stayed: null });
 
 // Fills data in place, so a caller keeps whatever was captured even if this throws partway.
 export async function capturePrivate(h: CaptureHelpers, onBookmarks: (bookmarks: Record<string, unknown>[]) => void, data: PrivateData = emptyPrivateData()): Promise<PrivateData> {
@@ -83,6 +95,14 @@ export async function capturePrivate(h: CaptureHelpers, onBookmarks: (bookmarks:
   } finally {
     onBookmarks(data.bookmarks);
   }
+
+  // The own moderation record and the stayed list, which the app shows its owner: kept only on the
+  // app's servers, and cheap, so they come before the long DM capture. The app's own paths and page
+  // size, for the token's own FID only.
+  const record = await h.raw({ name: 'moderation-record', path: '/v2/network-code/public-rap-sheet', params: { fid: h.ownFid }, limit: 20, maxPages: 100, count: countEntries });
+  data.moderationRecord = record.count;
+  const stayed = await h.raw({ name: 'following-stayed', path: '/v2/opt-in/following-stayed', params: {}, maxPages: 1, count: stayedCount });
+  data.stayed = stayed.count;
 
   // Direct casts: every category's conversation list, then each unique conversation's messages.
   const byId = new Map<string, DmConversation>();

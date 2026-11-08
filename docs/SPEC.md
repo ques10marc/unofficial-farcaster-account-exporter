@@ -15,7 +15,7 @@ Options and exit codes are in [USAGE.md](USAGE.md).
 
 ## Datasets
 
-Every export's `manifest.json` gives each dataset a status: `complete`, `empty`, or `unavailable:<reason>`. A dataset can also be `error:<reason>`; when a lane stops early, the datasets it never reached are `error:<lane>-lane-aborted`. Without `--private`, D3 and D10–D13 are `unavailable:private-not-requested`.
+Every export's `manifest.json` gives each dataset a status: `complete`, `empty`, or `unavailable:<reason>`. A dataset can also be `error:<reason>`; when a lane stops early, the datasets it never reached are `error:<lane>-lane-aborted`. Without `--private`, D3, D10–D13, D19 and D20 are `unavailable:private-not-requested`. D19 and D20 are information: whatever their status, they never make an export fail, and `verify` shows them without grading them. The IDs D16 to D18 are not used.
 
 | ID | Dataset | Manifest sources | Needs `--private` |
 |---|---|---|---|
@@ -34,6 +34,8 @@ Every export's `manifest.json` gives each dataset a status: `complete`, `empty`,
 | D13 | Favourite mini apps | `client:favorite-mini-apps` | yes |
 | D14 | Media of own casts and bookmarked casts | `media:own`, `media:bookmarks` | for bookmarks only |
 | D15 | Context casts: parents of replies, and reacted-to casts | `protocol:context-casts` | no |
+| D19 | Your own moderation record, as the app shows it to you: the pages of `GET /v2/network-code/public-rap-sheet` for the token's own FID, kept as they came | `client:moderation-record` | yes |
+| D20 | The app's "following stayed" list, the count and first accounts it shows beside the Network Code agreement (`GET /v2/opt-in/following-stayed`), kept as it came | `client:following-stayed` | yes |
 
 ## Output layout
 
@@ -41,7 +43,7 @@ Each run writes a new directory that is never modified afterwards: every file is
 
 ```
 fc-export-<fid>-<UTC>/
-  manifest.json          every source's host, pages, final-cursor state and status; each dataset's status
+  manifest.json          every source's host, pages, final-cursor state and status; each dataset's status; the account status
   SHA256SUMS             every file except OS metadata
   raw/protocol/*.pb      length-delimited protobuf Message / OnChainEvent records, signed dataBytes intact
   raw/protocol/*.jsonl   the same records as JSON
@@ -81,6 +83,7 @@ Reason codes come from a closed set: `self_follow`, `hidden_by_client`, `client_
 - **Host:** `https://client.farcaster.xyz`, falling back to `https://farcaster.xyz/~api`.
 - **`/v2/following` and `/v2/followers`:** these allow 50 accounts per page, 20 requests per 10 s, and 500 per hour.
 - **Private endpoints** (`--private`): listed in [USAGE.md](USAGE.md) "What `--private` fetches". They declare no rate limit, so `castsnap` paces them at one request per 600 ms.
+- **Account status:** `optInStatus`, `nerfed` and `canSendDirectCasts` from `result.user.viewerContext`, and `publicSpamLabel` from `result.extras`, in `/v2/user-by-fid` (every run). With a token, `/v2/me` adds `result.optInStatus`, `neynarScore` and `enabledFeatureFlags`. `castsnap` copies these values as the app sends them, and makes no request for them.
 
 ## Network etiquette
 
@@ -92,12 +95,12 @@ Reason codes come from a closed set: `self_follow`, `hidden_by_client`, `client_
 
 ## Acceptance criteria
 
-`castsnap verify` reports each criterion as PASS, FAIL or N/A. N/A means the run did not cover it, for example private data on a run without `--private`. An export passes when every P0 criterion passes. P1 and P2 criteria cover lower-priority data. AC-22, the manual parts of AC-12 and AC-18, and AC-16's repo search and `git status` are checked by hand; `verify` prints the manual steps. The IDs AC-05 to AC-09 are not used.
+`castsnap verify` reports each criterion as PASS, FAIL or N/A. It also prints `STATUS`, an information line with the account status and D19 and D20, which is never PASS or FAIL and never changes the exit code. N/A means the run did not cover it, for example private data on a run without `--private`. An export passes when every P0 criterion passes. P1 and P2 criteria cover lower-priority data. AC-22, the manual parts of AC-12 and AC-18, and AC-16's repo search and `git status` are checked by hand; `verify` prints the manual steps. The IDs AC-05 to AC-09 are not used.
 
 | ID | P | PASS when… |
 |---|---|---|
 | AC-01 | P0 | `castsnap export` exits 0, and every dataset D1–D15 in the manifest has status `complete`, `empty`, or `unavailable:<reason>`. Zero have status `error`. |
-| AC-02 | P0 | Every paginated source records that its final page returned an empty cursor or token. |
+| AC-02 | P0 | Every paginated source records that its final page returned an empty cursor or token. D19's source, which is information, is not graded. |
 | AC-03 | P0 | `castsnap verify` recomputes SHA256SUMS with 0 mismatches. |
 | AC-04 | P0 | **Messages and signers**, all three must hold: (a) 100% of exported protocol messages pass offline blake3 hash and ed25519 signature checks using `@farcaster/core`; (b) every message in the FID's own sets (casts, reactions, links, user data, verifications, storage lends, link compact state) carries the FID; (c) every such message's signer is authorized for the FID, as proven by the export alone: either by an on-chain signer ADD event, or by a gasless `KEY_ADD` that is exported, passes (a), carries a custody EIP-712 signature that recovers to the FID's custody address at the `KEY_ADD`'s time (from the exported ID-registry events), lists the message's type in its scopes, and whose TTL covers the message. TTL coverage follows Snapchain's sliding rule, with message timestamps in place of the block timestamps the export does not hold: walking the key's exported `KEY_ADD`s, `KEY_REMOVE`s and messages in timestamp order, a `KEY_ADD` sets the key's last use to its timestamp, a `KEY_REMOVE` ends the key until a later `KEY_ADD`, each message must fall no later than last use + TTL, and a message more than 300 s after the last use moves it to the message's timestamp. Followers, context casts and bookmarked casts are fetched for context and get check (a) only. |
 | AC-10 | P0 | **Following**, all three must hold: (a) the protocol following count, excluding any self-follow, equals the app profile's `followingCount` exactly; (b) zero accounts appear in the client `/v2/following` list but not in the protocol set; (c) every protocol-only account is listed in `reconciliation.json` as `hidden_by_client`, or as `self_follow` for the self-follow. |

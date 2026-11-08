@@ -26,11 +26,13 @@ import { FARCASTER_EPOCH_S, type KeyEvent, type KeyUse, keyOf, messageData, shor
 import { PROFILE_FIELDS } from './normalize.ts';
 import { followersTolerance } from './reconcile.ts';
 import { scanTreeForSecret, tokenFromEnv } from './secrets.ts';
+import { pickStatus, statusLine } from './status.ts';
 import { decodeDelimited, listExportFiles, sha256File, SUMS_FILE } from './writer.ts';
 import { fcTimeToIso, tally, toHex } from './util.ts';
 import type { Manifest } from './export.ts';
 
-export type Verdict = 'PASS' | 'FAIL' | 'N/A';
+// INFO: shown, never graded, never changes the exit code (the STATUS line).
+export type Verdict = 'PASS' | 'FAIL' | 'N/A' | 'INFO';
 export interface Check {
   id: string;
   verdict: Verdict;
@@ -62,6 +64,8 @@ function rawPages(dir: string): { files: string[]; bodies: { result?: Record<str
 }
 const lastCursorEmpty = (bodies: { next?: { cursor?: string } }[]) => bodies.length > 0 && !bodies[bodies.length - 1].next?.cursor;
 const DATASET_IDS = Array.from({ length: 15 }, (_, i) => `D${i + 1}`);
+// The own moderation record and the stayed list (D19, D20): information, never graded.
+const INFO_SOURCES = new Set(['client:moderation-record', 'client:following-stayed']);
 
 const okStatus = (s: string) => /^(complete|empty|unavailable:.+)$/.test(s);
 const finished = (s: string | undefined) => s === 'complete' || s === 'empty';
@@ -87,7 +91,8 @@ export async function verifyExport(dir: string, opts: { env?: NodeJS.ProcessEnv;
   {
     const missing = DATASET_IDS.filter((id) => !m.datasets[id]);
     const bad = DATASET_IDS.filter((id) => m.datasets[id] && !okStatus(m.datasets[id].status));
-    const counts = tally(Object.values(m.datasets), (d) => d.status.split(':')[0]);
+    // D19 and D20 are information, so they are not in these counts.
+    const counts = tally(Object.entries(m.datasets).filter(([id]) => DATASET_IDS.includes(id)).map(([, d]) => d), (d) => d.status.split(':')[0]);
     const unavailable = DATASET_IDS.filter((id) => m.datasets[id]?.status.startsWith('unavailable')).map((id) => `${id}=${m.datasets[id].status}`);
     add('AC-01', missing.length || bad.length || m.result !== 'ok' ? 'FAIL' : 'PASS', [
       `datasets D1-D15 present: ${DATASET_IDS.length - missing.length}/15${missing.length ? ' missing ' + missing.join(',') : ''}`,
@@ -100,8 +105,10 @@ export async function verifyExport(dir: string, opts: { env?: NodeJS.ProcessEnv;
 
   // ---------- AC-02 ----------
   {
-    // Sources the run had no endpoint for (unavailable:*) were never paginated; AC-01 reports them.
-    const all = Object.entries(m.sources).filter(([, s]) => s.paginated);
+    // Sources the run had no endpoint for (unavailable:*) were never paginated; AC-01 reports them. The
+    // own moderation record and the stayed list are information (the STATUS line), not graded here.
+    const all = Object.entries(m.sources).filter(([n, s]) => s.paginated && !INFO_SOURCES.has(n));
+    const info = Object.entries(m.sources).filter(([n]) => INFO_SOURCES.has(n));
     const skipped = all.filter(([, s]) => s.status.startsWith('unavailable'));
     const paged = all.filter(([, s]) => !s.status.startsWith('unavailable'));
     const notEnded = paged.filter(([, s]) => s.lastCursorEmpty !== true);
@@ -111,6 +118,7 @@ export async function verifyExport(dir: string, opts: { env?: NodeJS.ProcessEnv;
       `end reasons: ${JSON.stringify(ends)}`,
       ...notEnded.map(([n, s]) => `not ended: ${n} status=${s.status}`),
       ...(skipped.length ? [`not paginated (unavailable): ${skipped.map(([n, s]) => `${n}=${s.status}`).join(', ')}`] : []),
+      ...(info.length ? [`information, not graded: ${info.map(([n, s]) => `${n}=${s.status}`).join(', ')}`] : []),
     ]);
   }
 
@@ -608,6 +616,23 @@ export async function verifyExport(dir: string, opts: { env?: NodeJS.ProcessEnv;
       `signers: on-chain signer events ${m.sources['protocol:onchain-events-signer']?.items} (${m.sources['protocol:onchain-events-signer']?.status}); storage before ${m.sources['protocol:storage-before']?.status}, after ${m.sources['protocol:storage-after']?.status}`,
       ...bad.map((b) => `not complete/exhausted: ${b}`),
     ]);
+  }
+
+  // ---------- STATUS (information: never PASS or FAIL, and never changes the exit code) ----------
+  {
+    const page = (name: string): unknown => {
+      try {
+        return readJson<unknown>(`raw/client/${name}/page-0001.json`);
+      } catch {
+        return undefined;
+      }
+    };
+    const { fields, from } = pickStatus({ after: page('profile-after'), before: page('profile-before'), me: page('me') });
+    const dataset = (id: string, label: string) => {
+      const d = m.datasets[id];
+      return d ? `${label} ${id}: ${d.status}${d.count !== null ? `, count ${d.count}` : ''}` : `${label} ${id}: not in this export`;
+    };
+    add('STATUS', 'INFO', [statusLine(fields, from), `${dataset('D19', 'own moderation record')}; ${dataset('D20', 'stayed list')}`, 'information only: not graded']);
   }
 
   add('AC-22', 'N/A', ['setup criterion; checked from a fresh clone, not by verify']);

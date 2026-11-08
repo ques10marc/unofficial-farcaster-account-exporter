@@ -175,12 +175,56 @@ async function request(urlPath, params, { auth }) {
   }
 }
 
+// ---------- account status ----------
+// The same line castsnap prints (src/status.ts), from the pages saved below; test/account-status.test.ts
+// keeps the two in step. Also the counting for the moderation record and the stayed list.
+const asObject = (v) => (v !== null && typeof v === 'object' && !Array.isArray(v) ? v : undefined);
+const showValue = (v) => (typeof v === 'string' && /^[A-Za-z0-9_.-]{1,40}$/.test(v) ? v : (JSON.stringify(v) ?? String(v)).slice(0, 120));
+function statusOf(body, from) {
+  const result = asObject(asObject(body)?.result);
+  const user = asObject(result?.user);
+  if (!user) return null;
+  const vc = asObject(user.viewerContext) ?? {};
+  const s = {};
+  for (const k of ['optInStatus', 'nerfed', 'canSendDirectCasts']) if (k in vc) s[k] = vc[k];
+  if (from === 'me') {
+    for (const [k, o] of [['optInStatus', result], ['neynarScore', user], ['enabledFeatureFlags', result]]) if (k in o) s[k] = o[k];
+  } else {
+    const extras = asObject(result.extras);
+    if (extras && 'publicSpamLabel' in extras) s.publicSpamLabel = extras.publicSpamLabel;
+  }
+  return s;
+}
+function statusLine(s, from) {
+  if (!s) return `Account status: not available (no readable answer from ${from})`;
+  const parts = [`optInStatus=${'optInStatus' in s ? showValue(s.optInStatus) : '(not reported)'}`];
+  if (from.startsWith('profile-')) parts.push(`publicSpamLabel=${'publicSpamLabel' in s ? showValue(s.publicSpamLabel) : '(not reported)'}`);
+  if ('nerfed' in s) parts.push(`nerfed=${showValue(s.nerfed)}`);
+  return `Account status: ${parts.join(' ')} (from ${from})`;
+}
+const countEntries = (body) => {
+  const r = body?.result;
+  if (Array.isArray(r)) return r.length;
+  const o = asObject(r);
+  if (!o) return null;
+  const lists = Object.values(o).filter(Array.isArray);
+  return !lists.length && Object.keys(o).length ? null : lists.reduce((n, l) => n + l.length, 0);
+};
+const stayedCount = (body) => {
+  const r = asObject(body?.result);
+  if (!r) return null;
+  if (typeof r.count === 'number' && Number.isFinite(r.count)) return r.count;
+  return Array.isArray(r.users) ? r.users.length : null;
+};
+
 // ---------- capture ----------
 const manifest = { tool: 'quick-capture', version: VERSION, schema: 1, endpoints: {} };
 const log = (s) => process.stdout.write(redact(s) + '\n');
 
-// Fetch every page of one endpoint. Saves each response body verbatim.
-async function capture(name, urlPath, { params = {}, auth = false, itemsKey, limit, paginated = true, dir = name }) {
+// Fetch every page of one endpoint. Saves each response body verbatim. count: for an answer whose shape
+// is not documented (the moderation record, the stayed list), counts each page's entries (null: not
+// countable), and a 200 without a result is then unavailable:no-result, not empty. maxPages: stop there.
+async function capture(name, urlPath, { params = {}, auth = false, itemsKey, limit, paginated = true, dir = name, count, maxPages }) {
   const entry = { path: urlPath, params, auth, pages: 0, items: 0, lastCursorEmpty: null, status: 'error:not-started' };
   manifest.endpoints[name] = entry;
   if (auth && !TOKEN) { entry.status = 'skipped:public-only'; return { ...entry, results: [] }; }
@@ -206,12 +250,23 @@ async function capture(name, urlPath, { params = {}, auth = false, itemsKey, lim
     writeFile(`${dir}/page-${String(entry.pages).padStart(4, '0')}.json`, r.text);
     let body;
     try { body = JSON.parse(r.text); } catch { entry.status = 'error:non-json'; return { ...entry, results }; }
+    if (count) {
+      if (body === null || typeof body !== 'object' || body.result === undefined || body.result === null) {
+        entry.status = 'unavailable:no-result';
+        const m = Array.isArray(body?.errors) ? body.errors[0]?.message : undefined;
+        if (typeof m === 'string') entry.note = `errors[0].message: ${redact(m).slice(0, 200)}`;
+        return { ...entry, results };
+      }
+      const c = count(body);
+      if (c === null) entry.uncounted = true; else entry.items += c;
+    }
     const items = itemsKey ? body?.result?.[itemsKey] : undefined;
     if (Array.isArray(items)) { entry.items += items.length; results.push(...items); }
     if (paginated && limits[limitIdx] !== undefined) entry.limitUsed = limits[limitIdx];
     const next = body?.next?.cursor;
-    if (!paginated || !next) { entry.lastCursorEmpty = true; entry.status = entry.items === 0 && itemsKey ? 'empty' : 'complete'; return { ...entry, results }; }
+    if (!paginated || !next) { entry.lastCursorEmpty = true; entry.status = entry.items === 0 && (itemsKey || (count && !entry.uncounted)) ? 'empty' : 'complete'; return { ...entry, results }; }
     if (seen.has(next)) { entry.status = 'error:cursor-loop'; entry.lastCursorEmpty = false; return { ...entry, results }; }
+    if (maxPages && entry.pages >= maxPages) { entry.lastCursorEmpty = false; entry.status = 'complete'; entry.note = `stopped after ${entry.pages} pages; next.cursor not followed`; return { ...entry, results }; }
     seen.add(next);
     cursor = next;
   }
@@ -275,6 +330,11 @@ async function main() {
   log('Capturing:');
   await capture('profile-before', '/v2/user-by-fid', { params: { fid }, paginated: false }); summarize('profile-before');
   await capture('bookmarks', '/v2/bookmarked-casts', { auth: true, itemsKey: 'bookmarks', limit: 100 }); summarize('bookmarks');
+  // The own moderation record and the stayed list, which the app shows its owner (castsnap's D19 and
+  // D20): the app's own paths and page size, for the token's own FID only. Their answer shapes are not
+  // documented, so the pages are kept as they came and counted, and a refusal is only a status.
+  await capture('moderation-record', '/v2/network-code/public-rap-sheet', { params: { fid }, auth: true, limit: 20, maxPages: 100, count: countEntries }); summarize('moderation-record');
+  await capture('following-stayed', '/v2/opt-in/following-stayed', { auth: true, paginated: false, count: stayedCount }); summarize('following-stayed');
 
   // Direct casts: conversation lists per category, then every conversation's messages.
   const convIds = new Set();
@@ -311,6 +371,10 @@ async function main() {
 
   manifest.finishedAt = new Date().toISOString();
   manifest.interrupted = interrupted;
+  // The account status, as castsnap prints it, from the pages saved above.
+  const savedPage = (dir) => { try { return JSON.parse(fs.readFileSync(path.join(OUT_DIR, dir, 'page-0001.json'), 'utf8')); } catch { return undefined; } };
+  const picked = ['profile-after', 'profile-before', 'me'].map((from) => ({ from, fields: statusOf(savedPage(from), from) })).find((p) => p.fields) ?? { from: 'profile-after', fields: null };
+  manifest.accountStatus = { line: statusLine(picked.fields, picked.from), source: picked.from, fields: picked.fields };
 
   // Token self-scan over everything written, then checksums.
   const scan = () => listFiles(OUT_DIR).filter((f) => { const buf = fs.readFileSync(path.join(OUT_DIR, f)); return tokenForms().some((v) => buf.includes(v)); });
@@ -322,6 +386,7 @@ async function main() {
   writeFile('SHA256SUMS', sums.join('\n') + '\n');
 
   const unrecorded = Object.entries(manifest.endpoints).filter(([, e]) => !e.status || e.status === 'error:not-started');
+  log(manifest.accountStatus.line);
   log(`Files: ${sums.length} (+SHA256SUMS). Verify later with: cd "${OUT_DIR}" && shasum -a 256 -c SHA256SUMS`);
   log(TOKEN ? `Token self-scan: ${hits.length} file(s) contain the token${hits.length ? ' -- DELETE THIS FOLDER and report it' : ''}.` : 'Token self-scan: not applicable (public-only run).');
   if (hits.length) return 2;

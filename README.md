@@ -13,7 +13,7 @@
 ## What it saves
 
 - **Public data, no sign-in needed:** your casts and replies, likes and recasts, following, followers, profile, username proofs, verifications, signers and storage, blocks, channel follows, the casts you replied to or reacted to, and the media of your own casts. Most of this is signed protocol data from public Farcaster nodes. The follow lists, blocks and channel follows are also cross-checked against the Farcaster app's public API. castsnap reads protocol data from the public Snapchain nodes at `snap.farcaster.xyz` and `crackle.farcaster.xyz`, so an export holds what Snapchain holds on the day you run it. Hypersnap, a fork of Snapchain, has announced it will become a separate network; once it does, anything that exists only on Hypersnap won't be in a castsnap export (see `--hub` in [USAGE](docs/USAGE.md)).
-- **Private data, with your session token (`--private`):** what exists only on the Farcaster app's servers: bookmarks, direct casts (DMs), drafts, mutes, favourite mini apps, and the media of bookmarked casts. castsnap reads them through the app's own undocumented API, which can change or stop working at any time.
+- **Private data, with your session token (`--private`):** what exists only on the Farcaster app's servers: bookmarks, direct casts (DMs), drafts, mutes, favourite mini apps, the media of bookmarked casts, and the moderation record and stayed list the app shows you. castsnap reads them through the app's own undocumented API, which can change or stop working at any time.
 
 Each run writes a new folder under `~/FarcasterExports/`. On macOS and Linux, only you can read it.
 
@@ -25,6 +25,7 @@ Since the October 2026 change of ownership, some accounts have been banned or re
 
 - **Protocol data should still export.** It comes from public Farcaster nodes, not from your app account. This is expected but not yet confirmed on a banned account. The app's public API might hide a banned account, which would affect only the cross-checks.
 - **Private data depends on whether the app still accepts your session.** Bookmarks and DMs live on the app's servers. castsnap can reach them only with a session token the app still accepts. The token check in [Private data](#private-data) tells you within a minute and writes nothing.
+- **Every export shows your account's status in the app.** Its `Account status:` line gives the app's `optInStatus` for your account (`pending`, `opted_in` or `moderated_out`), its public spam label, and `nerfed=true` if the app reports that. `auth-check` prints it too. The line is safe to share; see [USAGE](docs/USAGE.md#account-status).
 - **Either way, please send us the result** with the **Banned or restricted account** issue form. Failures are just as useful as successes.
 
 Step by step: [docs/BANNED_ACCOUNTS.md](docs/BANNED_ACCOUNTS.md).

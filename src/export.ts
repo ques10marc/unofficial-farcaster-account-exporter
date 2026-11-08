@@ -54,6 +54,7 @@ import { clientEdges, mergeGraph, type ProtoEdge, reconcile } from './reconcile.
 import { capturePrivate, type CaptureHelpers, DM_CATEGORIES, emptyPrivateData, mutedKeywordList, type PrivateData } from './private.ts';
 import { RECONCILIATION_SCHEMA, SCHEMAS } from './schemas.ts';
 import { makeRedactor, registerSecret, safeErrorText, scanTreeForSecrets, tokenFromEnv } from './secrets.ts';
+import { pickStatus, shapeNote, statusFromMe, statusFromProfile, statusLine, type StatusFields } from './status.ts';
 import { errMessage, fcTimeToIso, fromHex, interrupt, LIBRARIES, toHex, VERSION } from './util.ts';
 import { ExportWriter } from './writer.ts';
 
@@ -105,6 +106,9 @@ export interface Manifest {
   authCheck?: { host: string; fid: number; attempts: { base: string; status: number }[] };
   // --private only: one entry per direct-cast conversation (manifest.sources has the aggregate).
   directCasts?: { index: number; conversationId: string; categories: string[]; dir: string; status: string; pages: number; messages: number; lastCursorEmpty: boolean; limitUsed?: number }[];
+  // The account's status in the app, from answers castsnap already saves (src/status.ts): the printed
+  // line, the answer it came from, and each answer's fields (client:me on --private runs only).
+  accountStatus?: { line: string; source: string; fields: Record<string, StatusFields | null> };
   datasets: Record<string, DatasetEntry>;
   sources: Record<string, SourceEntry>;
   counts: Record<string, unknown>;
@@ -155,6 +159,9 @@ export class AuthCheckError extends Error {
 }
 
 const NOT_REQUESTED = 'unavailable:private-not-requested';
+// The own moderation record and the stayed list are information: whatever their status, they never
+// make the export an error.
+const INFO_DATASETS = new Set(['D19', 'D20']);
 const pad = (n: number) => String(n).padStart(4, '0');
 const finished = (s: string | undefined) => s === 'complete' || s === 'empty';
 
@@ -671,6 +678,8 @@ export async function runExport(opts: ExportOptions): Promise<ExportResult> {
 
   const clientData: Record<string, unknown[] | null> = {};
   const profiles: Record<string, Record<string, unknown> | undefined> = {};
+  // The whole /v2/user-by-fid bodies, for the account status (profiles keeps result.user only).
+  const profileBodies: Record<string, unknown> = {};
   let priv: PrivateData | null = null;
 
   // Verbatim pages go to raw/client/<dir>/page-NNNN.json. Error bodies are saved redacted (a server could
@@ -731,9 +740,44 @@ export async function runExport(opts: ExportOptions): Promise<ExportResult> {
     clientData[name] = finished(entry.status) ? items : null;
     return { entry, items };
   };
+  // An endpoint whose answer shape is not documented (D19, D20): 200 pages verbatim, any other answer
+  // redacted as an error file. Entries are counted by count; no shape is an error, and a 200 page with
+  // no entries makes the source empty only when count could count it.
+  const rawSource = async (name: string, path: string, params: Record<string, string | number>, o: { limit?: number; maxPages: number; count: (bodies: unknown[]) => number | null }) => {
+    laneAt.client = name;
+    let entry: SourceEntry;
+    let count: number | null = null;
+    const paginated = o.maxPages > 1;
+    try {
+      const r = await client.pagesRaw(path, params, { limit: o.limit, maxPages: o.maxPages });
+      const files = r.pages.map((p, i) => {
+        const rel = `raw/client/${name}/page-${pad(i + 1)}.json`;
+        writer.write(rel, p);
+        return rel;
+      });
+      if (r.errorBody !== undefined) {
+        const rel = `raw/client/${name}/error-${pad(r.pages.length + 1)}.json`;
+        writer.write(rel, redact(r.errorBody));
+        files.push(rel);
+      }
+      if (r.status === 'complete') count = o.count(r.bodies);
+      const status = r.status === 'complete' && count === 0 ? 'empty' : r.status;
+      const notes = [...(r.bodies.length ? [shapeNote(r.bodies)] : []), ...(r.status === 'complete' && count === null ? ['entries not counted: no list directly under result; the pages are kept as they are'] : []), ...(r.note ? [redact(r.note)] : [])];
+      entry = { kind: 'client', host: r.base, paginated, status, pages: r.pages.length, items: count ?? 0, lastCursorEmpty: paginated ? r.lastCursorEmpty : null, files, ...(notes.length ? { notes } : {}) };
+    } catch (e) {
+      entry = sourceException(paginated, e);
+    }
+    S[`client:${name}`] = entry;
+    report(`client:${name}`);
+    return { entry, count };
+  };
 
   const clientLane = async () => {
-    const object = (name: string, path: string, params: Record<string, string | number>) => objectSource(name, path, params).then((r) => r.body as { result?: { user?: Record<string, unknown> } } | undefined);
+    const object = (name: string, path: string, params: Record<string, string | number>) =>
+      objectSource(name, path, params).then((r) => {
+        profileBodies[name] = r.body;
+        return r.body as { result?: { user?: Record<string, unknown> } } | undefined;
+      });
     const paged = (name: string, path: string, params: Record<string, string | number>, itemsKey: string, limit: number) => pagedSource(name, path, params, itemsKey, limit);
     profiles.before = (await object('profile-before', '/v2/user-by-fid', { fid }))?.result?.user;
     if (opts.private) {
@@ -747,6 +791,8 @@ export async function runExport(opts: ExportOptions): Promise<ExportResult> {
           S[name] = entry;
           report(name);
         },
+        raw: (o) => rawSource(o.name, o.path, o.params, { limit: o.limit, maxPages: o.maxPages, count: o.count }),
+        ownFid: auth!.fid!,
         log,
         isInterrupted: () => interrupt.requested,
       };
@@ -1015,6 +1061,20 @@ export async function runExport(opts: ExportOptions): Promise<ExportResult> {
   if (!mediaSources.length) manifest.datasets.D14 = { name: 'media', status: scope.bookmarks ? NOT_REQUESTED : 'unavailable:disabled-by-flag', count: null, sources: [], lastCursorEmpty: null, notes: [`--media ${opts.media}`, ...mediaNotes] };
   else ds('D14', `media (${[scope.own ? 'own casts' : '', wantBookmarkMedia ? 'bookmarked casts' : ''].filter(Boolean).join(' and ')})`, mediaSources, (manifest.media as MediaStats | undefined)?.urls ?? 0, mediaNotes);
   ds('D15', 'context casts', ['protocol:context-casts'], contextCasts.length);
+  // D19 and D20 keep their source's status as it is (see INFO_DATASETS); a lane that stopped first
+  // still shows as error:<lane>-lane-aborted.
+  const infoDs = (id: string, name: string, source: string, count: number | null): void => {
+    const s = S[source];
+    const aborted = abortedIn([source]);
+    manifest.datasets[id] = { name, status: aborted ? aborted.status : (s?.status ?? 'error:source-missing'), count: s && finished(s.status) ? count : null, sources: s ? [source] : [], lastCursorEmpty: s ? s.lastCursorEmpty : null, notes: [...(s?.notes ?? []), ...abortNote(aborted)] };
+  };
+  if (opts.private) {
+    infoDs('D19', 'own moderation record', 'client:moderation-record', pd?.moderationRecord ?? null);
+    infoDs('D20', 'stayed list', 'client:following-stayed', pd?.stayed ?? null);
+  } else {
+    notRequested('D19', 'own moderation record');
+    notRequested('D20', 'stayed list');
+  }
 
   manifest.counts = {
     following: recon.summary.following,
@@ -1033,10 +1093,22 @@ export async function runExport(opts: ExportOptions): Promise<ExportResult> {
     profile: Object.fromEntries(Object.entries(profiles).map(([k, u]) => [k, u ? { followerCount: u.followerCount ?? null, followingCount: u.followingCount ?? null } : null])),
   };
 
+  let meBody: unknown;
+  try {
+    meBody = auth?.text ? JSON.parse(auth.text) : undefined;
+  } catch {}
+  const picked = pickStatus({ after: profileBodies['profile-after'], before: profileBodies['profile-before'], me: meBody });
+  const accountLine = statusLine(picked.fields, picked.from);
+  manifest.accountStatus = {
+    line: accountLine,
+    source: `client:${picked.from}`,
+    fields: { 'client:profile-before': statusFromProfile(profileBodies['profile-before']), 'client:profile-after': statusFromProfile(profileBodies['profile-after']), ...(opts.private ? { 'client:me': statusFromMe(meBody) } : {}) },
+  };
+
   // ---------- seal ----------
   manifest.interrupted = interrupt.requested;
   manifest.finishedAt = now().toISOString();
-  const errors = [...Object.values(manifest.datasets).filter((d) => d.status.startsWith('error')), ...laneErrors];
+  const errors = [...Object.entries(manifest.datasets).filter(([id, d]) => !INFO_DATASETS.has(id) && d.status.startsWith('error')).map(([, d]) => d), ...laneErrors];
   manifest.result = manifest.interrupted ? 'interrupted' : errors.length ? 'errors' : 'ok';
   // The token in use (--private) and any token in the environment are both scanned for.
   if (secrets.length) {
@@ -1054,6 +1126,7 @@ export async function runExport(opts: ExportOptions): Promise<ExportResult> {
 
   const exitCode = hits.length ? 2 : manifest.interrupted ? 130 : errors.length ? 1 : 0;
   log(`Datasets: ${Object.entries(manifest.datasets).map(([id, d]) => `${id}=${d.status}`).join(' ')}`);
+  log(accountLine);
   if (laneErrors.length) {
     log(`Lane errors: ${laneErrors.join('; ')}.${notFetched.size ? ` Not fetched: ${[...notFetched].join(', ')}.` : ''}`);
     log(`Result: ${manifest.result} (exit ${exitCode}). Re-run the export; see docs/USAGE.md.`);

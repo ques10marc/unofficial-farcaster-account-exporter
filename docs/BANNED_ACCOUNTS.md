@@ -6,17 +6,8 @@ Since the October 2026 change of ownership, the Farcaster app has banned or rest
 
 - **Your protocol data should still be reachable.** Casts, reactions, follows, followers and your profile are signed messages stored on public Farcaster nodes, not in your app account. castsnap reads them with no sign-in. *This is expected, but not yet confirmed on a banned account.*
 - **Your bookmarks and DMs live only on the app's servers.** castsnap can reach them only with a session token that the app still accepts. Nobody yet knows whether a banned or restricted account can still sign in, or whether an existing signed-in session keeps working. Step 3 below finds out without writing anything.
-- **castsnap doesn't read your account's status in the app, and `auth-check` shows only the HTTP code, not the app's reason.** Some sites show a restricted account as `moderated_out`. If yours does, say so on the report form: castsnap has not yet been run on such an account. You can help us learn where the app says so without sharing any content. In a terminal (on Windows, Git Bash), go into your export folder, then run the search. It skips the folders and files that hold DMs, bookmarks and drafts, and prints only how many files match in each folder:
-
-  ```bash
-  cd "PASTE_THE_FOLDER_HERE"
-  ```
-
-  ```bash
-  grep -r -l -i -E 'moderated.?out' --exclude-dir='dm-*' --exclude-dir=bookmarks --exclude-dir=drafts --exclude='dm-*' --exclude='bookmark*' --exclude='drafts*' . | cut -d/ -f2-4 | sort | uniq -c
-  ```
-
-  Send only the lines it prints. If it prints nothing, say so: that is a result too.
+- **castsnap shows your account's status in the app.** Every export, public or `--private`, prints an `Account status:` line just before `Files:`, and `auth-check` prints it too. `optInStatus=moderated_out` is how the app marks a restricted account, and `nerfed=true` appears when the app hides the account. What each value means, as far as is known, is in [USAGE.md](USAGE.md#account-status). The line is safe to share.
+- **The app shows a restricted account its own moderation record.** With `--private`, castsnap asks for it the way the app does, for your own FID only, as dataset D19, and also saves the app's stayed list (D20). Nobody yet knows what the app answers for a banned account. Whatever it answers, a refusal included, is recorded as the dataset's status and never makes the export fail.
 - **Older DMs may already be gone.** Some conversations have disappearing-message settings, so the server deletes their older messages over time. Each export saves what is still there on that day.
 
 **Please report your result** with the **Banned or restricted account** issue form, whatever happens. Each result tells the next person what to expect.
@@ -43,7 +34,7 @@ Then check the folder it printed:
 node bin/castsnap.js verify "PASTE_THE_FOLDER_HERE"
 ```
 
-Keep this export whatever happens in the next steps.
+Note the `Account status:` line near the end of the export's output: your report can include it. Keep this export whatever happens in the next steps.
 
 ## 2. Try to get a session token
 
@@ -60,7 +51,7 @@ node bin/castsnap.js auth-check --fid YOUR_FID
 ```
 
 At the hidden prompt, paste the token once, then press Enter.
-- **`auth-check: OK`**: the app still accepts your session. Go on to step 4.
+- **`auth-check: OK`**, then `Account status: …`: the app still accepts your session. Go on to step 4.
 - **`Token check failed: /v2/me returned HTTP 401`** or **`403`**: the app refused the token. If you pasted it more than once, run step 3 again and paste it once. Otherwise, copy a fresh token once and try again. If it still fails, go to step 5.
 
 ## 4. Save your private data
@@ -79,16 +70,17 @@ Then run the full export, which adds signed casts, media and offline checks:
 node bin/castsnap.js export --fid YOUR_FID --private
 ```
 
-Check it with `verify`, as in step 1. A private dataset may come back as `unavailable:<reason>` rather than `complete`. That means the app refused that part, which is worth reporting too.
+Check it with `verify`, as in step 1. A private dataset may come back as `unavailable:<reason>` rather than `complete`. That means the app refused that part, which is worth reporting too. `verify`'s `STATUS` line shows D19, your moderation record, and D20, the stayed list. Their statuses are worth reporting; what the record says is yours to share or not.
 
 ## 5. Report what happened
 
 Open the **Banned or restricted account** issue form. It asks only for outcomes:
 - whether you could sign in;
 - the `auth-check` result;
-- whether each export finished.
+- whether each export finished;
+- if you want, the `Account status:` line.
 
-Your FID and username aren't needed.
+Your FID and username aren't needed, and neither is the content of your moderation record (in `raw/client/moderation-record/`): share it only if you want to.
 
 ## Stay safe
 

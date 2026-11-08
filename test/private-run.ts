@@ -119,7 +119,7 @@ if (import.meta.main) {
   for (const l of r.logs) console.log(l.split(r.token).join('[SENTINEL]'));
   console.log(`export exit code: ${r.result.exitCode}`);
   const auth = r.mock.requests.filter((q) => q.auth !== 'none');
-  console.log(`mock requests: ${r.mock.requests.length}; with a token ${auth.length} (all private paths: ${auth.every((q) => q.path.startsWith('/v'))}); public paths with a token: ${r.mock.requests.filter((q) => q.auth !== 'none' && !['/v2/me', '/v2/bookmarked-casts', '/v2/direct-cast-conversation-list', '/v2/direct-cast-conversation-messages', '/v2/draft-casts', '/v2/get-muted-keywords', '/v2/get-muted-users', '/v2/get-muted-channels', '/v1/favorite-frames'].includes(q.path)).length}`);
+  console.log(`mock requests: ${r.mock.requests.length}; with a token ${auth.length} (all private paths: ${auth.every((q) => q.path.startsWith('/v'))}); public paths with a token: ${r.mock.requests.filter((q) => q.auth !== 'none' && !['/v2/me', '/v2/bookmarked-casts', '/v2/direct-cast-conversation-list', '/v2/direct-cast-conversation-messages', '/v2/draft-casts', '/v2/get-muted-keywords', '/v2/get-muted-users', '/v2/get-muted-channels', '/v1/favorite-frames', '/v2/network-code/public-rap-sheet', '/v2/opt-in/following-stayed'].includes(q.path)).length}`);
   console.log(`media requests: ${r.mediaCalls.length}; with an authorization header: ${r.mediaCalls.filter((c) => c.headers.authorization !== undefined).length}`);
   const lookupHash = toHex(r.lookupOnly.hash);
   const pb = path.join(r.result.dir, 'raw/protocol/bookmarked-casts.pb');

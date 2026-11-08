@@ -75,6 +75,7 @@ These checks refer to the folder the script printed as `Output:`.
   - `complete`
   - `empty`
   - `unavailable:<HTTP code>`, meaning the server refused that endpoint
+  - `unavailable:no-result`, for the moderation record and the stayed list only: the server answered without a result, usually a refusal
   - `partial:…`, for DM conversations only
 - If **every** DM line shows `unavailable:401` or `unavailable:403`, the app isn't serving your DMs to this token. Please report that with the **Banned or restricted account** form (if that applies) or a **Bug report**.
 
@@ -85,6 +86,8 @@ python3 -c "import json,glob,sys; m=json.load(open(sorted(glob.glob(sys.argv[1]+
 ```
 
 **QC-3: no token in the output.** The last line the script prints must be `Token self-scan: 0 file(s) contain the token.`
+
+**Your account's status.** Just before `Files:`, the script prints `Account status: …`, the same line as castsnap ([USAGE.md](USAGE.md#account-status)). It's safe to share. The script also asks for your own moderation record and the stayed list, which the app shows its owner. Their lines are `moderation-record` and `following-stayed`, and any status there, `unavailable:<HTTP code>` included, is a normal result.
 
 **QC-4: your newest and oldest bookmarks are present.**
 1. In the app, open your bookmarks, and copy a distinctive phrase from the **newest** one.
