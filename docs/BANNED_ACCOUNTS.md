@@ -59,7 +59,7 @@ If you can't sign in anywhere, castsnap can't reach your bookmarks or DMs. Skip 
 node bin/castsnap.js auth-check --fid YOUR_FID
 ```
 
-Paste the token once at the hidden prompt.
+At the hidden prompt, paste the token once, then press Enter.
 - **`auth-check: OK`**: the app still accepts your session. Go on to step 4.
 - **`Token check failed: /v2/me returned HTTP 401`** or **`403`**: the app refused the token. If you pasted it more than once, run step 3 again and paste it once. Otherwise, copy a fresh token once and try again. If it still fails, go to step 5.
 

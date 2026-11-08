@@ -68,6 +68,8 @@ function normalizeToken(raw) {
 // One text twice over ("XX"), as when a paste is repeated because nothing appeared; as in src/secrets.ts.
 const pastedTwice = (s) => { const t = s.replace(/\x1b\[20[01]~/g, '').trim(); const half = t.length / 2; return t.length >= 2 && Number.isInteger(half) && t.slice(0, half) === t.slice(half); };
 const chars = (n) => `${n} character${n === 1 ? '' : 's'}`;
+// An answer of only whitespace and bracketed-paste markers, as when Enter is pressed before pasting.
+const blank = (s) => !s.replace(/\x1b\[20[01]~/g, '').trim();
 // Input that arrives within this many ms of the prompt taking the terminal was typed or pasted before the
 // question appeared, so the terminal may have shown it: it is discarded and counted, never used.
 const EARLY_INPUT_MS = 200;
@@ -90,6 +92,9 @@ function promptHidden(question) {
       for (const c of chunk) {
         if (c === '\u0003') { finish(new Error('Cancelled')); return; }
         if (!ready) { early++; continue; }
+        // Nothing yet: ask again rather than exit, so a paste that follows can't land in the shell. Echo is
+        // still off, so there is no second wait.
+        if ((c === '\r' || c === '\n') && blank(buf)) { buf = ''; process.stdout.write('Nothing was received. To cancel, press Ctrl+C.\n'); process.stdout.write(question); continue; }
         if (c === '\r' || c === '\n') { finish(); return; }
         if (c === '\u007f' || c === '\b') buf = buf.slice(0, -1);
         else buf += c;
@@ -101,7 +106,7 @@ function promptHidden(question) {
     stdin.resume();
     timer = setTimeout(() => {
       ready = true;
-      if (early) process.stdout.write(`Ignored ${chars(early)} typed or pasted before this prompt was ready. They may have been shown on screen; if that was your token, clear the terminal's scrollback.\n`);
+      if (early) process.stdout.write(`\nIgnored ${chars(early)} typed or pasted before this prompt was ready; they weren't used or sent. If that was your token, it may still show above, so close this window when you're done.\n`);
       process.stdout.write(question);
     }, EARLY_INPUT_MS);
   });
@@ -224,7 +229,7 @@ async function main() {
   if (args.help) { console.log(fs.readFileSync(new URL(import.meta.url), 'utf8').split('\n').slice(1, 11).join('\n')); return 0; }
 
   if (!args.publicOnly) {
-    const typed = process.env.FC_SESSION_TOKEN || (await promptHidden('Paste session token (input hidden), then Enter: '));
+    const typed = process.env.FC_SESSION_TOKEN || (await promptHidden('Paste your session token, then press Enter (nothing shows while you paste): '));
     TOKEN = normalizeToken(typed);
     if (!TOKEN) throw new Error('Empty token.');
     if (pastedTwice(typed) || pastedTwice(TOKEN)) throw new Error('The token looks pasted twice (the same text two times in a row); run the command again and paste it once.');

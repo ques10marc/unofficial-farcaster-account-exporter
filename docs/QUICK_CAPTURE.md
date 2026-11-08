@@ -50,7 +50,7 @@ Follow step 1 of "Private data" in [USAGE.md](USAGE.md#1-copy-your-session-token
 
 ## 2. Run it
 
-From the project folder, run the command below and paste the token once at the hidden prompt. Nothing appears while you paste; press Enter afterwards, and the script shows how many characters it received.
+From the project folder, run the command below. At the hidden prompt, paste the token once, then press Enter; nothing appears while you paste. The script then shows how many characters it received.
 
 ```bash
 node scripts/quick-capture.mjs

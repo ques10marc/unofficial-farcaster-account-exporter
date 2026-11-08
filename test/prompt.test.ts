@@ -1,8 +1,8 @@
 // The hidden token prompt, in castsnap and in quick capture: input typed before the prompt is ready is
-// discarded and counted, the answer is shown only as a character count, a value pasted twice is refused
-// before any request, and castsnap shows the prompt before loading the protocol libraries. No real token
-// is used and nothing leaves the machine: child processes get a replaced fetch and --base on a closed
-// loopback port.
+// discarded and counted, on a line of its own; the answer is shown only as a character count; an empty
+// answer asks again, until Ctrl+C; a value pasted twice is refused before any request; and castsnap shows
+// the prompt before loading the protocol libraries. No real token is used and nothing leaves the machine:
+// child processes get a replaced fetch and --base on a closed loopback port.
 
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -16,6 +16,10 @@ import { checkTokenShape, promptHidden, readSessionToken } from '../src/secrets.
 
 const repo = path.join(import.meta.dirname, '..');
 const sentinel = () => `castsnap-sentinel-${randomUUID()}`;
+// The prompt's texts, written out here rather than imported, so that a change to them fails a test.
+const QUESTION = 'Paste your session token, then press Enter (nothing shows while you paste): ';
+const AGAIN = 'Nothing was received. To cancel, press Ctrl+C.\n';
+const NOTE = (n: number) => `Ignored ${n} characters typed or pasted before this prompt was ready; they weren't used or sent. If that was your token, it may still show above, so close this window when you're done.`;
 
 // A stand-in terminal for promptHidden. `pending` was typed before the prompt took the terminal, so it
 // arrives right after resume(), as buffered input does. `onWrite` sees each write the prompt makes.
@@ -46,6 +50,14 @@ function fakeTerminal(pending: string) {
   return { stdin, out, raw, ask };
 }
 
+// Answers a stand-in terminal's prompt: each time the question `Q: ` is shown, the next answer arrives.
+function answer(term: ReturnType<typeof fakeTerminal>, ...answers: string[]): void {
+  term.out.onWrite = (s) => {
+    const a = s === 'Q: ' ? answers.shift() : undefined;
+    if (a !== undefined) setImmediate(() => term.stdin.emit('data', a));
+  };
+}
+
 test('prompt: input typed before the prompt is discarded and counted, and the answer is shown only as a length', async () => {
   const t = sentinel();
   const term = fakeTerminal('early-paste');
@@ -53,13 +65,39 @@ test('prompt: input typed before the prompt is discarded and counted, and the an
     if (s === 'Q: ') setImmediate(() => term.stdin.emit('data', `${t}\r`));
   };
   assert.equal(await term.ask('Q: '), t);
-  assert.equal(term.out.text, `Ignored 11 characters typed or pasted before this prompt was ready. They may have been shown on screen; if that was your token, clear the terminal's scrollback.\nQ: ${t.length} characters received.\n`);
+  assert.equal(term.out.text, `\n${NOTE(11)}\nQ: ${t.length} characters received.\n`);
   assert.deepEqual(term.raw, [true, false]);
 
   // Ctrl+C cancels, even before the question appears.
   const early = fakeTerminal('\u0003');
   await assert.rejects(early.ask('Q: '), /Cancelled/);
   assert.equal(early.out.text, '\n');
+});
+
+test('prompt: an empty answer asks again, with no second wait, and the answer after it is used', { timeout: 5_000 }, async () => {
+  const t = sentinel();
+  // Enter alone, then only spaces and paste markers, then the token.
+  const term = fakeTerminal('');
+  answer(term, '\r', ' \x1b[200~\x1b[201~ \r', `${t}\r`);
+  assert.equal(await term.ask('Q: '), t);
+  assert.equal(term.out.text, `Q: ${AGAIN}Q: ${AGAIN}Q: ${t.length} characters received.\n`);
+  // Echo went off once and came back once: it stayed off while the prompt asked again.
+  assert.deepEqual(term.raw, [true, false]);
+
+  // Input right after an empty answer is used, even in the same chunk: the early-input wait isn't repeated.
+  const fast = fakeTerminal('');
+  answer(fast, `\r${t}\r`, 'not-this\r');
+  assert.equal(await fast.ask('Q: '), t);
+  assert.equal(fast.out.text, `Q: ${AGAIN}Q: ${t.length} characters received.\n`);
+});
+
+test('prompt: empty answers keep asking until Ctrl+C, which cancels during a retry', { timeout: 5_000 }, async () => {
+  // Five empty answers, then `ab` and Ctrl+C. The Enter after Ctrl+C must never be read.
+  const term = fakeTerminal('');
+  answer(term, '\r', '\r', '\r', '\r', '\r', 'ab\u0003\r');
+  await assert.rejects(term.ask('Q: '), /Cancelled/);
+  assert.equal(term.out.text, `Q: ${`${AGAIN}Q: `.repeat(5)}\n`);
+  assert.deepEqual(term.raw, [true, false]);
 });
 
 test('token: a value pasted twice is refused before the length check, without echoing it', async () => {
@@ -102,17 +140,24 @@ test('castsnap shows the token prompt before it loads the protocol libraries', (
 });
 
 const FAKE = 'castsnap-fake-token-0000-1111-2222';
-// A stand-in terminal for a child process: `early` is waiting when the prompt takes the terminal, and
-// `typed` arrives 50 ms after the question. fetch prints each path it is asked for, and answers /v2/me
+// A stand-in terminal for a child process: `early` is waiting when the prompt takes the terminal, and, with
+// `echo`, the terminal has already shown it, leaving the cursor after it. Each time the question is shown,
+// the next of `answers` arrives 50 ms later. fetch prints each path it is asked for, and answers /v2/me
 // with fid 12 for exactly `Bearer FAKE`, else 401.
-const terminal = (early: string, typed: string) => `import { EventEmitter } from 'node:events';
+const terminal = (early: string, answers: string[], echo = false) => `import { EventEmitter } from 'node:events';
 import { writeSync } from 'node:fs';
 const t = new EventEmitter();
-Object.assign(t, { isTTY: true, setRawMode() {}, setEncoding() {}, pause() {}, resume() { if (${JSON.stringify(early)}) setImmediate(() => t.emit('data', ${JSON.stringify(early)})); } });
+const early = ${JSON.stringify(early)};
+const answers = ${JSON.stringify(answers)};
+Object.assign(t, { isTTY: true, setRawMode() {}, setEncoding() {}, pause() {}, resume() {
+  if (!early) return;
+  if (${echo}) for (const s of [process.stdout, process.stderr]) s.write(early);
+  setImmediate(() => t.emit('data', early));
+} });
 Object.defineProperty(process, 'stdin', { configurable: true, get: () => t });
 for (const s of [process.stdout, process.stderr]) {
   const w = s.write.bind(s);
-  s.write = (x, ...a) => { if (String(x).startsWith('Paste session token')) setTimeout(() => t.emit('data', ${JSON.stringify(typed)}), 50); return w(x, ...a); };
+  s.write = (x, ...a) => { if (String(x).startsWith('Paste your session token') && answers.length) { const typed = answers.shift(); setTimeout(() => t.emit('data', typed), 50); } return w(x, ...a); };
 }
 globalThis.fetch = async (u, init) => {
   writeSync(2, 'fetch ' + new URL(String(u)).pathname + '\\n');
@@ -126,15 +171,15 @@ const TOOLS: Record<string, string[]> = {
 
 test('castsnap and quick capture in a stand-in terminal: early input is ignored, the answer is counted, a doubled paste sends nothing', () => {
   for (const [tool, args] of Object.entries(TOOLS)) {
-    const once = run(args, terminal('fk1', `${FAKE}\r`));
+    const once = run(args, terminal('fk1', [`${FAKE}\r`]));
     assert.equal(once.code, 1, `${tool}: ${once.out}`);
-    assert.match(once.out, /Ignored 3 characters typed or pasted before this prompt was ready\./, tool);
-    assert.match(once.out, /Paste session token \(input hidden\), then Enter: 34 characters received\./, tool);
+    assert.match(once.out, /Ignored 3 characters typed or pasted before this prompt was ready; they weren't used or sent\./, tool);
+    assert.match(once.out, /Paste your session token, then press Enter \(nothing shows while you paste\): 34 characters received\./, tool);
     // The early input was not used: the token check saw exactly FAKE, which belongs to fid 12.
     assert.match(once.out, /belongs to fid 12, not --fid 11\./, tool);
     assert.match(once.out, /^fetch \/v2\/me$/m, tool);
 
-    const twice = run(args, terminal('', `${FAKE}${FAKE}\r`));
+    const twice = run(args, terminal('', [`${FAKE}${FAKE}\r`]));
     assert.equal(twice.code, 1, `${tool}: ${twice.out}`);
     assert.match(twice.out, /68 characters received\./, tool);
     assert.match(twice.out, /[Tt]he token looks pasted twice \(the same text two times in a row\); run the command again and paste it once\./, tool);
@@ -144,7 +189,40 @@ test('castsnap and quick capture in a stand-in terminal: early input is ignored,
 });
 
 test('quick capture: a rejected token says to paste once before copying a fresh one', () => {
-  const r = run(TOOLS['quick capture'], terminal('', 'castsnap-fake-token-9999\r'));
+  const r = run(TOOLS['quick capture'], terminal('', ['castsnap-fake-token-9999\r']));
   assert.equal(r.code, 1, r.out);
   assert.match(r.out, /Token check failed: \/v2\/me returned HTTP 401\. If you pasted more than once, run the command again and paste once\. If it still fails, copy a fresh token and retry\./);
+});
+
+test('castsnap and quick capture: an empty answer asks again, and the token after it is used', () => {
+  for (const [tool, args] of Object.entries(TOOLS)) {
+    const r = run(args, terminal('', ['\r', `${FAKE}\r`]));
+    assert.equal(r.code, 1, `${tool}: ${r.out}`);
+    assert.ok(r.out.includes(`${QUESTION}${AGAIN}${QUESTION}34 characters received.\n`), `${tool}: ${r.out}`);
+    // The token after the empty answer was used: the check saw exactly FAKE, which belongs to fid 12.
+    assert.match(r.out, /belongs to fid 12, not --fid 11\./, tool);
+    // The empty answer sent nothing: one request in all.
+    assert.equal(r.out.match(/^fetch /gm)?.length, 1, `${tool}: ${r.out}`);
+  }
+});
+
+test('castsnap and quick capture: empty answers keep asking, and Ctrl+C during a retry cancels', () => {
+  for (const [tool, args] of Object.entries(TOOLS)) {
+    // Five empty answers, then `ab` and Ctrl+C. The Enter after Ctrl+C must never be read.
+    const r = run(args, terminal('', ['\r', '\r', '\r', '\r', '\r', 'ab\u0003\r']));
+    assert.equal(r.code, 1, `${tool}: ${r.out}`);
+    assert.ok(r.out.includes(`${QUESTION}${`${AGAIN}${QUESTION}`.repeat(5)}\n`), `${tool}: ${r.out}`);
+    assert.match(r.out, /^Error: Cancelled$/m, tool);
+    assert.doesNotMatch(r.out, /characters? received|^fetch /m, `${tool}: ${r.out}`);
+  }
+});
+
+test('castsnap and quick capture: the note about early input starts on its own line', () => {
+  for (const [tool, args] of Object.entries(TOOLS)) {
+    // The terminal has shown `fk1` and left the cursor after it, as zsh, bash and Git Bash did in the retest.
+    const r = run(args, terminal('fk1', [`${FAKE}\r`], true));
+    assert.equal(r.code, 1, `${tool}: ${r.out}`);
+    assert.ok(r.out.includes(`fk1\n${NOTE(3)}\n${QUESTION}34 characters received.\n`), `${tool}: ${r.out}`);
+    assert.doesNotMatch(r.out, /fk1Ignored/, tool);
+  }
 });

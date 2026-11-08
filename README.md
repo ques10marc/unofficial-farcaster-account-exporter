@@ -93,7 +93,7 @@ For bookmarks, DMs and other private data, see [Private data](#private-data).
 
 You need a desktop browser in which you can still sign in at farcaster.xyz. [docs/USAGE.md](docs/USAGE.md) shows how to copy your session token.
 
-1. **Check your session token.** This writes nothing. Paste the token once at the hidden prompt; nothing appears while you paste.
+1. **Check your session token.** This writes nothing. At the hidden prompt, paste the token once, then press Enter; nothing appears while you paste.
 
    ```bash
    node bin/castsnap.js auth-check --fid YOUR_FID

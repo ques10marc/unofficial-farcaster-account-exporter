@@ -72,12 +72,16 @@ export function tokenFromEnv(env: NodeJS.ProcessEnv = process.env): string | und
 // question appeared, so the terminal may have shown it: it is discarded and counted, never used.
 export const EARLY_INPUT_MS = 200;
 const chars = (n: number) => `${n} character${n === 1 ? '' : 's'}`;
+// An answer of only whitespace and bracketed-paste markers, as when Enter is pressed before pasting.
+const blank = (s: string) => !s.replace(/\x1b\[20[01]~/g, '').trim();
 
 // Reads one line from the terminal without echoing it. The question goes to stderr so that a redirected
 // stdout never captures the prompt. Echo goes off first. Node can't flush or count input already waiting,
 // so whatever arrives in the first earlyMs is treated as typed before the prompt: discarded, and reported
-// by count. Only then does the question appear. After Enter, only the number of characters received is
-// shown, never the characters.
+// by count on a line of its own, since the terminal may have left it on screen. Only then does the question
+// appear. An empty answer asks again rather than exiting, so a paste that follows can't land in the shell;
+// echo is still off, so there is no second wait. Ctrl+C cancels at any point. After Enter, only the number
+// of characters received is shown, never the characters.
 export function promptHidden(question: string, stdin: NodeJS.ReadStream = process.stdin, out: NodeJS.WriteStream = process.stderr, earlyMs = EARLY_INPUT_MS): Promise<string> {
   if (!stdin.isTTY) return Promise.reject(new Error(`No terminal for a hidden prompt; set ${TOKEN_ENV} instead.`));
   return new Promise((resolve, reject) => {
@@ -101,6 +105,12 @@ export function promptHidden(question: string, stdin: NodeJS.ReadStream = proces
           early++;
           continue;
         }
+        if ((c === '\r' || c === '\n') && blank(buf)) {
+          buf = '';
+          out.write('Nothing was received. To cancel, press Ctrl+C.\n');
+          out.write(question);
+          continue;
+        }
         if (c === '\r' || c === '\n') return finish();
         if (c === '\u007f' || c === '\b') buf = buf.slice(0, -1);
         else buf += c;
@@ -112,7 +122,7 @@ export function promptHidden(question: string, stdin: NodeJS.ReadStream = proces
     stdin.resume();
     timer = setTimeout(() => {
       ready = true;
-      if (early) out.write(`Ignored ${chars(early)} typed or pasted before this prompt was ready. They may have been shown on screen; if that was your token, clear the terminal's scrollback.\n`);
+      if (early) out.write(`\nIgnored ${chars(early)} typed or pasted before this prompt was ready; they weren't used or sent. If that was your token, it may still show above, so close this window when you're done.\n`);
       out.write(question);
     }, earlyMs);
   });
@@ -122,7 +132,7 @@ export function promptHidden(question: string, stdin: NodeJS.ReadStream = proces
 // checked, so even a shape error cannot echo it.
 export async function readSessionToken(opts: { env?: NodeJS.ProcessEnv; prompt?: () => Promise<string> } = {}): Promise<{ token: string; from: 'env' | 'prompt' }> {
   const env = tokenFromEnv(opts.env);
-  const typed = env ?? (await (opts.prompt ?? (() => promptHidden('Paste session token (input hidden), then Enter: ')))());
+  const typed = env ?? (await (opts.prompt ?? (() => promptHidden('Paste your session token, then press Enter (nothing shows while you paste): ')))());
   const raw = env ?? normalizeToken(typed);
   // A value pasted with a stray space is refused below; its parts are registered too, so an echo of
   // either half is still redacted.

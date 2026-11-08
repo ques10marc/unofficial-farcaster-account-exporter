@@ -84,7 +84,7 @@ If no `~api` request has an `authorization` header, stop and open a **Bug report
 node bin/castsnap.js auth-check --fid YOUR_FID
 ```
 
-Paste the token once at the prompt; nothing appears while you paste. Press Enter. It shows how many characters it received, then prints one line:
+At the prompt, paste the token once, then press Enter; nothing appears while you paste. It shows how many characters it received, then prints one line:
 
 - `auth-check: OK. Token accepted by https://client.farcaster.xyz; it belongs to fid …, which matches --fid ….` Good: go on.
 - `… belongs to fid N, not --fid ….` You are signed in to a different account in that browser.
@@ -96,7 +96,7 @@ Paste the token once at the prompt; nothing appears while you paste. Press Enter
 node bin/castsnap.js export --fid YOUR_FID --private
 ```
 
-Paste the token again at the prompt. The run prints:
+At the prompt, paste the token again, then press Enter. The run prints:
 
 1. one line per source as it finishes;
 2. the dataset statuses;
