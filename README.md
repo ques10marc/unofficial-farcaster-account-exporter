@@ -119,7 +119,7 @@ You need a desktop browser in which you can still sign in at farcaster.xyz. [doc
 - **Banned or restricted account:** what you could and couldn't export.
 - **Feature request:** something castsnap should do.
 
-`castsnap verify` output is safe to paste, because it holds statuses and counts only. Never post your token, any DM, bookmark or draft text, export files, or `castsnap find` output.
+`castsnap verify` output is safe to paste, because it holds statuses and counts only. On a `--private` export, its `STATUS` line can also show `blockedByCount`, `mutedByCount` and `total` from your own moderation record. Those counts are personal, and sharing them is your choice. Never post your token, any DM, bookmark or draft text, export files, or `castsnap find` output.
 
 Security problems, such as a token or private data leaking, go through [SECURITY.md](SECURITY.md), not a public issue.
 

@@ -103,14 +103,27 @@ export function stayedCount(bodies: unknown[]): number | null {
   return Array.isArray(r.users) ? r.users.length : null;
 }
 
+// A value's type, with no value: a list's length in brackets, (null), or (string), (number) and so on.
+const kind = (v: unknown) => (Array.isArray(v) ? `[${v.length}]` : v === null ? '(null)' : `(${typeof v})`);
+
 // The first page's result as names and types, with no values, so the note can be shared: for example
 // "result: count(number), users[4]; pages 1".
 export function shapeNote(bodies: unknown[]): string {
-  const kind = (v: unknown) => (Array.isArray(v) ? `[${v.length}]` : v === null ? '(null)' : `(${typeof v})`);
   const r = obj(bodies[0])?.result;
   const o = obj(r);
   const keys = o ? Object.keys(o) : [];
   const fields = keys.slice(0, 12).map((k) => `${k.replace(/[^A-Za-z0-9_]/g, '?').slice(0, 40)}${kind(o?.[k])}`);
   const shape = !o ? `result${kind(r)}` : keys.length ? `result: ${fields.join(', ')}${keys.length > 12 ? `, ${keys.length - 12} more` : ''}` : 'result: no fields';
   return `${shape}; pages ${bodies.length}`;
+}
+
+// The own moderation record's counts, for verify's STATUS line: blockedByCount, mutedByCount and total
+// from the first page's result, each only when the result has it. A number is copied as the app sent
+// it; any other value shows only its type, as in shapeNote, so the line never holds text from the
+// answer. null when there is no readable result or it has none of the three.
+export function recordCounts(body: unknown): string | null {
+  const r = obj(obj(body)?.result);
+  if (!r) return null;
+  const parts = (['blockedByCount', 'mutedByCount', 'total'] as const).filter((k) => k in r).map((k) => `${k} ${typeof r[k] === 'number' ? String(r[k]) : kind(r[k])}`);
+  return parts.length ? parts.join(', ') : null;
 }

@@ -70,7 +70,7 @@ Then run the full export, which adds signed casts, media and offline checks:
 node bin/castsnap.js export --fid YOUR_FID --private
 ```
 
-Check it with `verify`, as in step 1. A private dataset may come back as `unavailable:<reason>` rather than `complete`. That means the app refused that part, which is worth reporting too. `verify`'s `STATUS` line shows D19, your moderation record, and D20, the stayed list. Their statuses are worth reporting; what the record says is yours to share or not.
+Check it with `verify`, as in step 1. A private dataset may come back as `unavailable:<reason>` rather than `complete`. That means the app refused that part, which is worth reporting too. `verify`'s `STATUS` line shows D19, your moderation record, and D20, the stayed list. Their statuses are worth reporting; what the record says is yours to share or not. When the record has them, the line also shows its `blockedByCount`, `mutedByCount` and `total`. Those counts are personal, and sharing them is your choice.
 
 ## 5. Report what happened
 

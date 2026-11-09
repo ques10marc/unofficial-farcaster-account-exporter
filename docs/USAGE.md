@@ -238,7 +238,7 @@ If the summary shows `Lane errors:`, one of the three lanes (protocol, client AP
 
 ## What to share when you report a result
 
-- the whole `verify` output, which holds statuses and counts only: DM conversations are referred to by number, never by ID or content;
+- the whole `verify` output, which holds statuses and counts only: DM conversations are referred to by number, never by ID or content. On a `--private` export, its `STATUS` line can also show `blockedByCount`, `mutedByCount` and `total` from your own moderation record. Those counts are personal, and sharing them is your choice;
 - the `Token self-scan` lines;
 - the `Account status:` line;
 - your manual check results: bookmarks as N of 5, and direct casts as N of 3.

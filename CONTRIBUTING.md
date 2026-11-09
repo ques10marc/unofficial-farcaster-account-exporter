@@ -5,7 +5,7 @@ Thank you for helping. castsnap handles people's private messages, and a credent
 ## Ground rules for everyone
 
 - **Never post a session token** anywhere: not in an issue, a PR, a commit, a log or a screenshot. If you posted one by mistake, see [SECURITY.md](SECURITY.md).
-- **Never post private data.** That includes DM, bookmark or draft text, export files, and `castsnap find` output. `castsnap verify` output is fine to share, because it holds statuses and counts only.
+- **Never post private data.** That includes DM, bookmark or draft text, export files, and `castsnap find` output. `castsnap verify` output is fine to share, because it holds statuses and counts only. On a `--private` export, its `STATUS` line can also show `blockedByCount`, `mutedByCount` and `total` from your own moderation record. Those counts are personal, and sharing them is your choice.
 - **Replace your home folder path with `~`** in anything you paste.
 - **Your FID and username are optional.** Including them links your report to your Farcaster account.
 

@@ -9,7 +9,7 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { countEntries, pickStatus, shapeNote, stayedCount, statusFromMe, statusFromProfile, statusLine } from '../src/status.ts';
+import { countEntries, pickStatus, recordCounts, shapeNote, stayedCount, statusFromMe, statusFromProfile, statusLine } from '../src/status.ts';
 import { verifyExport } from '../src/verify.ts';
 import { replayExport, tmpDir } from './helpers.ts';
 import { type MockOptions, startMock } from './mock-server.ts';
@@ -131,6 +131,63 @@ test('own record: a public run sends no own-record request, records D19 and D20 
   const v = await verifyExport(r.dir);
   const st = v.checks.find((c) => c.id === 'STATUS')!;
   assert.deepEqual([st.verdict, st.detail[0], st.detail[1]], ['INFO', PENDING_LINE, 'own moderation record D19: unavailable:private-not-requested; stayed list D20: unavailable:private-not-requested']);
+});
+
+// blockedByCount, mutedByCount and total on verify's STATUS line, from the own moderation record's
+// saved first page, on --private exports only. One mock --private export whose record has the fields
+// the app sent for a pending account (values made up); each test edits its own copy.
+const COUNTED = { result: { blockedByCount: 3, mutedByCount: 5, total: 0, posts: [], accountCharges: [] } };
+const RECORD_PAGE = 'raw/client/moderation-record/page-0001.json';
+const BEFORE = 'own moderation record D19: empty, count 0; stayed list D20: complete, count 12';
+let counted: Promise<string> | undefined;
+async function countedCopy(): Promise<string> {
+  counted ??= mockPrivateExport({ mock: { ownRecord: [{ body: COUNTED }], stayed: STAYED_12 } }).then((r) => r.result.dir);
+  const dir = path.join(tmpDir('castsnap-counts-'), 'export');
+  fs.cpSync(await counted, dir, { recursive: true });
+  return dir;
+}
+const recordLine = async (dir: string) => (await verifyExport(dir)).checks.find((c) => c.id === 'STATUS')?.detail[1];
+
+test('own record counts: verify shows blockedByCount, mutedByCount and total on a --private export', async () => {
+  assert.equal(await recordLine(await countedCopy()), 'own moderation record D19: empty, count 0 (blockedByCount 3, mutedByCount 5, total 0); stayed list D20: complete, count 12');
+  assert.equal(recordCounts({ result: { total: 7, blockedByCount: 1.5, mutedByCount: -1 } }), 'blockedByCount 1.5, mutedByCount -1, total 7');
+});
+
+test('own record counts: a page without them, an unreadable page or a missing page leaves the line as before', async () => {
+  const dir = await countedCopy();
+  for (const text of [JSON.stringify({ result: { posts: [], accountCharges: [] } }), JSON.stringify({ result: [] }), JSON.stringify(AUTH_REQUIRED), '{not json']) {
+    fs.writeFileSync(path.join(dir, RECORD_PAGE), text);
+    assert.equal(await recordLine(dir), BEFORE, text);
+  }
+  fs.rmSync(path.join(dir, RECORD_PAGE));
+  assert.equal(await recordLine(dir), BEFORE);
+});
+
+test('own record counts: an odd value shows only its type, never its text', async () => {
+  const dir = await countedCopy();
+  fs.writeFileSync(path.join(dir, RECORD_PAGE), JSON.stringify({ result: { blockedByCount: '3 private words', mutedByCount: null, total: { n: 1 } } }));
+  const line = await recordLine(dir);
+  assert.equal(line, 'own moderation record D19: empty, count 0 (blockedByCount (string), mutedByCount (null), total (object)); stayed list D20: complete, count 12');
+  assert.ok(!line?.includes('private words'), line);
+  assert.equal(recordCounts({ result: { mutedByCount: 3, total: [1, 2] } }), 'mutedByCount 3, total [2]');
+});
+
+test('own record counts: an export without D19 shows the line as before', async () => {
+  const dir = await countedCopy();
+  const file = path.join(dir, 'manifest.json');
+  const m = JSON.parse(fs.readFileSync(file, 'utf8'));
+  // As in an export made before D19 and D20 existed; the record's page stays in the folder.
+  for (const id of ['D19', 'D20']) delete m.datasets[id];
+  for (const s of ['client:moderation-record', 'client:following-stayed']) delete m.sources[s];
+  fs.writeFileSync(file, JSON.stringify(m, null, 2));
+  assert.equal(await recordLine(dir), 'own moderation record D19: not in this export; stayed list D20: not in this export');
+});
+
+test('own record counts: a public export shows the line as before, even with a record page in its folder', async () => {
+  const r = await replayExport();
+  fs.mkdirSync(path.join(r.dir, 'raw/client/moderation-record'), { recursive: true });
+  fs.writeFileSync(path.join(r.dir, RECORD_PAGE), JSON.stringify(COUNTED));
+  assert.equal(await recordLine(r.dir), 'own moderation record D19: unavailable:private-not-requested; stayed list D20: unavailable:private-not-requested');
 });
 
 function runCli(args: string[], env: Record<string, string>): Promise<{ code: number | null; out: string }> {

@@ -26,7 +26,7 @@ import { FARCASTER_EPOCH_S, type KeyEvent, type KeyUse, keyOf, messageData, shor
 import { PROFILE_FIELDS } from './normalize.ts';
 import { followersTolerance } from './reconcile.ts';
 import { scanTreeForSecret, tokenFromEnv } from './secrets.ts';
-import { pickStatus, statusLine } from './status.ts';
+import { pickStatus, recordCounts, statusLine } from './status.ts';
 import { decodeDelimited, listExportFiles, sha256File, SUMS_FILE } from './writer.ts';
 import { fcTimeToIso, tally, toHex } from './util.ts';
 import type { Manifest } from './export.ts';
@@ -628,11 +628,14 @@ export async function verifyExport(dir: string, opts: { env?: NodeJS.ProcessEnv;
       }
     };
     const { fields, from } = pickStatus({ after: page('profile-after'), before: page('profile-before'), me: page('me') });
-    const dataset = (id: string, label: string) => {
+    const dataset = (id: string, label: string, extra: string | null = null) => {
       const d = m.datasets[id];
-      return d ? `${label} ${id}: ${d.status}${d.count !== null ? `, count ${d.count}` : ''}` : `${label} ${id}: not in this export`;
+      return d ? `${label} ${id}: ${d.status}${d.count !== null ? `, count ${d.count}` : ''}${extra ? ` (${extra})` : ''}` : `${label} ${id}: not in this export`;
     };
-    add('STATUS', 'INFO', [statusLine(fields, from), `${dataset('D19', 'own moderation record')}; ${dataset('D20', 'stayed list')}`, 'information only: not graded']);
+    // The record's own counts (blockedByCount, mutedByCount, total), from its saved first page, on
+    // --private exports only. They are personal: the docs leave sharing them to the user.
+    const counts = isPrivate ? recordCounts(page('moderation-record')) : null;
+    add('STATUS', 'INFO', [statusLine(fields, from), `${dataset('D19', 'own moderation record', counts)}; ${dataset('D20', 'stayed list')}`, 'information only: not graded']);
   }
 
   add('AC-22', 'N/A', ['setup criterion; checked from a fresh clone, not by verify']);

@@ -7,7 +7,7 @@ body:
     attributes:
       value: |
         **Before you start:** never paste a session token, any DM, bookmark or draft text, export files, or `castsnap find` output. Replace your home folder path with `~`.
-        `castsnap verify` output is safe to paste, because it holds statuses and counts only. Security problems go through SECURITY.md, not an issue.
+        `castsnap verify` output is safe to paste, because it holds statuses and counts only. On a `--private` export, its `STATUS` line can also show `blockedByCount`, `mutedByCount` and `total` from your own moderation record. Those counts are personal, and sharing them is your choice. Security problems go through SECURITY.md, not an issue.
   - type: checkboxes
     id: privacy
     attributes:
