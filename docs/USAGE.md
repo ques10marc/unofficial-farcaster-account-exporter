@@ -16,6 +16,12 @@ If the Farcaster app banned or restricted your account, start with [BANNED_ACCOU
   curl -s 'https://snap.farcaster.xyz:3381/v1/userNameProofByName?name=YOUR_USERNAME'
   ```
 
+  In PowerShell:
+
+  ```powershell
+  curl.exe -s "https://snap.farcaster.xyz:3381/v1/userNameProofByName?name=YOUR_USERNAME"
+  ```
+
 In every command below, replace `YOUR_FID` with your FID.
 
 ## Run it
@@ -64,7 +70,17 @@ node bin/castsnap.js verify "PASTE_THE_FOLDER_HERE"
   - Before writing anything, it checks with `/v2/me` that the token belongs to `--fid`. If it doesn't, or the token is rejected, the run stops and no folder is created.
   - At the end, it scans its own output for the token and prints `Token self-scan: N file(s) contain the token.` N should be 0. If it isn't, the run exits with code 2: delete that folder.
 - **Signing out does not revoke a copied token.** A copied token may stay valid for an unknown time after you sign out, and there is no known way for you to revoke it. In a test, it kept working after signing out of farcaster.xyz, and the app's Settings → Sessions screen didn't end it either.
-- **The output is private on macOS and Linux.** It contains your DMs. There, the folder and each file in it are readable only by you (modes 0700 and 0600). castsnap can't set that on Windows, so don't use `--private` on native Windows for now. Don't put the output in git or cloud sync unless you mean to.
+- **Only your account can read the output.** It contains your DMs. Don't put it in git or cloud sync unless you mean to.
+  - On macOS and Linux, the folder and each file in it are readable only by you (modes 0700 and 0600).
+  - On Windows, castsnap removes the folder's inherited permissions and gives only your account access (hands-on test pending). [Windows](#windows-powershell-and-git-bash) says how to check that with `icacls`.
+  - An administrator can still take ownership of the folder and read it, on any of them.
+- **Where the output may go.** With `--private`, castsnap checks the export folder's location before it asks for your token, and stops if the folder would be:
+  - in OneDrive, or on macOS in iCloud Drive, Dropbox or another cloud storage folder;
+  - on a network path, a WSL path, or a mapped or mounted network drive;
+  - on a FAT32 or exFAT disk, which has no permissions;
+  - on Windows, on a drive whose type it can't read.
+
+  It only warns about a removable drive, a FUSE file system, a location it can't check, and, on Windows, a folder that looks synced (Dropbox, Google Drive or iCloud Drive). Runs without `--private` only warn. `--allow-unsafe-location` lets `--private` write to a location it would refuse, and the export's manifest records that option.
 
 ### 1. Copy your session token (desktop browser)
 
@@ -77,6 +93,8 @@ node bin/castsnap.js verify "PASTE_THE_FOLDER_HERE"
 7. Copy the value. You can include the word `Bearer`, or even the whole `authorization: Bearer …` line; `castsnap` strips both.
 
 If no `~api` request has an `authorization` header, stop and open a **Bug report**: the web app may have changed how it signs in.
+
+**Copying the token puts it on your clipboard.** On Windows, clipboard history (**Win+V**) keeps what you copy, and **Share across devices** (Settings → System → Clipboard) uploads it to your other devices. Turn both off before you copy the token, or press **Win+V** and choose **Clear all** right after you paste it. A VM or remote desktop that shares your clipboard also gets the token.
 
 ### 2. Check the token (optional, writes nothing)
 
@@ -120,10 +138,24 @@ In bash:
 read -rsp "Token: " FC_SESSION_TOKEN && export FC_SESSION_TOKEN
 ```
 
+In PowerShell (it shows `*` for each character):
+
+```powershell
+$env:FC_SESSION_TOKEN = (New-Object System.Net.NetworkCredential('', (Read-Host 'Token' -AsSecureString))).Password
+```
+
+Never type `$env:FC_SESSION_TOKEN = '…'` with the token in it: PowerShell saves each line you type in its history file. If you did, delete that line from the file that `(Get-PSReadLineOption).HistorySavePath` names.
+
 Then run the export, and `verify` with the folder it printed. When you're done, clear the token:
 
 ```bash
 unset FC_SESSION_TOKEN
+```
+
+In PowerShell:
+
+```powershell
+Remove-Item Env:FC_SESSION_TOKEN
 ```
 
 ### What `--private` fetches
@@ -156,6 +188,32 @@ D19 and D20 are not in `types.yml`: their paths and page size come from the web 
 - **Ctrl-C twice** exits immediately.
 - **There is no resume yet,** so run the export again to get a complete copy.
 
+## Windows (PowerShell and Git Bash)
+
+The commands in this guide are bash. Git Bash, which comes with Git for Windows, runs them as written. In cmd, use PowerShell instead. Windows permissions and `--private` on native Windows: hands-on test pending.
+
+In PowerShell:
+
+- **Type `curl.exe`, not `curl`,** and put the URL in double quotes. In Windows PowerShell 5.1, `curl` runs `Invoke-WebRequest` instead.
+- **Don't rely on `~` in a path you pass to node.** Write `--out "$HOME\FarcasterExports"` rather than `--out ~/FarcasterExports`.
+- **Put quotes around paths,** especially ones with spaces.
+- **Run each command on its own line.** Windows PowerShell 5.1 has no `&&`.
+
+**Check the folder's permissions** (hands-on test pending). The list should have one entry, for your account, and no entry marked `(I)`, which would mean inherited:
+
+```powershell
+icacls "PASTE_THE_FOLDER_HERE"
+```
+
+**Check `SHA256SUMS`.** It prints nothing when every file matches, and `FAILED:` with the file's name for each one that doesn't:
+
+```powershell
+Set-Location "PASTE_THE_FOLDER_HERE"
+Get-Content SHA256SUMS | ForEach-Object { $h,$f = $_ -split '  ',2; if ((Get-FileHash -Algorithm SHA256 -LiteralPath $f).Hash -ne $h) { "FAILED: $f" } }
+```
+
+In Git Bash, `sha256sum -c SHA256SUMS` works too.
+
 ## Manual checks
 
 `verify` can't see the app, so it prints these steps with the exact command for your export folder. Each check passes or fails.
@@ -184,6 +242,7 @@ node bin/castsnap.js find "PASTE_THE_FOLDER_HERE" "PASTE A PHRASE HERE"
 |---|---|---|
 | `--out DIR` | `~/FarcasterExports` | Parent folder for the new export folder |
 | `--private` | off | Also export bookmarks, DMs, drafts, mutes and mini apps, using your session token |
+| `--allow-unsafe-location` | off | Lets `--private` write to a synced, network or FAT/exFAT location, which it otherwise refuses before it asks for your token (see [Where the output may go](#security-read-first)). The manifest records the option |
 | `--media LIST` | `own,bookmarks` | Media to download, stored by SHA-256: `own`, `bookmarks`, `own,bookmarks`, or `none`. `bookmarks` needs `--private` |
 | `--hub HOST` | `snap.farcaster.xyz:3383` | Protocol source tried first: a gRPC `host:port`, or an `https://` HTTP API base. `castsnap` falls back only between Farcaster's own Snapchain nodes: gRPC on `snap.farcaster.xyz:3383`, then `crackle.farcaster.xyz:3383`, then their HTTP APIs on port `3381` in the same order. Any other `--hub` gets no fallback, so one export never mixes two networks. Farcaster's nodes answer only on ports 3383 and 3381, so a network that allows only web traffic (port 443) blocks them. To export from Hypersnap instead, pass `--hub https://haatz.quilibrium.com`, which answers on port 443; `verify`'s checks are written for Snapchain |
 | `--base URL` | `https://client.farcaster.xyz`, then `https://farcaster.xyz/~api` | Pins the client API host, with no fallback. Only those two hosts, or a loopback address for testing, are accepted |
@@ -199,7 +258,7 @@ Other commands:
 ## Output
 
 - **`manifest.json`** holds every source's host, pages, final-cursor state and status, plus the status of each dataset D1–D15, D19 and D20, and the account status (`accountStatus`; see [Account status](#account-status)). A `--private` run also records the token check (`authCheck`: the host and FID, never the token) and one entry per DM conversation (`directCasts`).
-- **`SHA256SUMS`** works with `shasum -a 256 -c SHA256SUMS`. It never lists OS metadata such as `.DS_Store`, which Finder may add later.
+- **`SHA256SUMS`** works with `shasum -a 256 -c SHA256SUMS`, or `sha256sum -c SHA256SUMS`. In PowerShell, use `Get-FileHash` as shown under [Windows](#windows-powershell-and-git-bash). It never lists OS metadata such as `.DS_Store`, which Finder may add later.
 - **`raw/protocol/*.pb`** are length-delimited protobuf `Message`/`OnChainEvent` records, with the signed `dataBytes` intact. **`raw/protocol/*.jsonl`** holds the same records as JSON.
 - **`raw/client/`** holds the verbatim API pages.
 - **`normalized/`** holds the JSON files, with their JSON Schemas in `normalized/schemas/`. Their format, schemaVersion 1, is experimental: a schemaVersion 2 is planned, so files and fields may change.

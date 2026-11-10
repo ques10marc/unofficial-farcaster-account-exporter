@@ -15,7 +15,7 @@
 - **Public data, no sign-in needed:** your casts and replies, likes and recasts, following, followers, profile, username proofs, verifications, signers and storage, blocks, channel follows, the casts you replied to or reacted to, and the media of your own casts. Most of this is signed protocol data from public Farcaster nodes. The follow lists, blocks and channel follows are also cross-checked against the Farcaster app's public API. castsnap reads protocol data from the public Snapchain nodes at `snap.farcaster.xyz` and `crackle.farcaster.xyz`, so an export holds what Snapchain holds on the day you run it. Hypersnap, a fork of Snapchain, has announced it will become a separate network; once it does, anything that exists only on Hypersnap won't be in a castsnap export (see `--hub` in [USAGE](docs/USAGE.md)).
 - **Private data, with your session token (`--private`):** what exists only on the Farcaster app's servers: bookmarks, direct casts (DMs), drafts, mutes, favourite mini apps, the media of bookmarked casts, and the moderation record and stayed list the app shows you. castsnap reads them through the app's own undocumented API, which can change or stop working at any time.
 
-Each run writes a new folder under `~/FarcasterExports/`. On macOS and Linux, only you can read it.
+Each run writes a new folder under `~/FarcasterExports/` that only your account can read. On macOS and Linux, castsnap sets modes 0700 and 0600. On Windows, it removes the inherited permissions and gives only your account access (hands-on test pending). An administrator can still get at the folder on any of them.
 
 **The export format is experimental.** It is schemaVersion 1, and a schemaVersion 2 is planned, so files and fields may change.
 
@@ -38,11 +38,17 @@ Step by step: [docs/BANNED_ACCOUNTS.md](docs/BANNED_ACCOUNTS.md).
 - **Where castsnap has been tested:**
   - **macOS** (Node 24): tested, including `--private`.
   - **Linux** (Arch, Node 26): tested for public export, `verify` and the hidden token prompt (with fake tokens). The export folders are readable only by you. `--private` is untested.
-  - **Windows 11** (Node 26): public export and `verify` work, and write the same files as on Linux. castsnap can't make the folder readable only by you on Windows, so `verify`'s permissions check (AC-16) fails there. On the Windows 11 machine tested, the default folder inherited permissions that limited it to you, administrators and SYSTEM; that depends on how a machine is set up. **Don't use `--private` or the quick capture on native Windows for now.** Use Git Bash, which comes with Git for Windows: the commands in these docs work there as written. Put quotes around Windows paths.
+  - **Windows 11** (Node 26): public export and `verify` were tested, and write the same files as on Linux. castsnap now also makes the export folder readable only by your account on Windows, and `verify`'s permissions check (AC-16) reads the folder's permission list. Windows permissions and `--private` on native Windows: hands-on test pending. **Don't use the quick capture on native Windows for now.** The commands in these docs are bash, which on Windows comes with Git for Windows as Git Bash. Where PowerShell needs a different command, a PowerShell block follows the bash one. In cmd, use PowerShell instead. Put quotes around Windows paths.
 - **Your FID**, your account's number. To look it up from your username, run this, replacing `YOUR_USERNAME` with your username (for example `alice` or `alice.eth`), and read the `"fid"` value:
 
   ```bash
   curl -s 'https://snap.farcaster.xyz:3381/v1/userNameProofByName?name=YOUR_USERNAME'
+  ```
+
+  In PowerShell:
+
+  ```powershell
+  curl.exe -s "https://snap.farcaster.xyz:3381/v1/userNameProofByName?name=YOUR_USERNAME"
   ```
 
 In every command below, replace `YOUR_FID` with your FID.
@@ -87,7 +93,8 @@ For bookmarks, DMs and other private data, see [Private data](#private-data).
   - **Anyone who asks you for your token is trying to take over your account,** even if they say they're from this project. The maintainer will never ask for it.
 - **What castsnap does with the token:** castsnap keeps it in memory only. It sends it only to `https://client.farcaster.xyz` or `https://farcaster.xyz/~api`, and never along a redirect. At the end it scans its own output for the token and prints `Token self-scan: N file(s) contain the token.`, where N should be 0.
 - **Signing out does not revoke a copied token.** It may stay valid for an unknown time, and there is no known way for you to revoke it.
-- **Your export contains your DMs.** Keep it out of git and cloud sync unless you mean to share it.
+- **Your export contains your DMs.** Keep it out of git and cloud sync unless you mean to share it. With `--private`, castsnap stops before it sends your token if the export folder would be in a synced, network or FAT/exFAT location (such as OneDrive, iCloud Drive, a network drive, or a FAT32 or exFAT disk). `--allow-unsafe-location` overrides that, and the export's manifest records the override.
+- **Copying the token puts it on your clipboard.** Clipboard history, and a clipboard shared across devices, with a VM or with a remote desktop, can keep or upload it. Step 1 in [USAGE](docs/USAGE.md) says how to avoid that on Windows.
 - **castsnap never asks for your seed phrase or recovery phrase.** Anyone who does is not us.
 
 ### Run it

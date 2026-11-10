@@ -7,6 +7,7 @@ This describes what `castsnap` 0.1.0 exports and how `castsnap verify` grades an
 | Command | Purpose |
 |---|---|
 | `castsnap export --fid N [--out DIR] [--private] [--media own,bookmarks\|own\|bookmarks\|none] [--hub HOST] [--base URL]` | Run an export |
+| `castsnap export --fid N --private --allow-unsafe-location` | Let `--private` write to a synced, network or FAT/exFAT location, which it otherwise refuses before the token prompt. The manifest records the option |
 | `castsnap auth-check --fid N [--base URL]` | Confirm the session token belongs to the FID, via `/v2/me`. Writes nothing |
 | `castsnap verify DIR [--json]` | Check hashes, signatures and schemas, and run the automatable acceptance checks |
 | `castsnap find DIR <query>` | Search an export, for manual spot checks |
@@ -39,7 +40,7 @@ Every export's `manifest.json` gives each dataset a status: `complete`, `empty`,
 
 ## Output layout
 
-Each run writes a new directory that is never modified afterwards: every file is written exactly once. On macOS and Linux, directory mode is 0700 and file mode is 0600. Windows ignores these modes, so there the directory has only the permissions it inherits.
+Each run writes a new directory that is never modified afterwards: every file is written exactly once. On macOS and Linux, directory mode is 0700 and file mode is 0600. On Windows, where these modes do nothing, castsnap removes the directory's inherited permissions and gives the user's account full control, which everything inside it inherits (hands-on test pending). If the directory can't be made readable by the user's account only, a `--private` run stops and writes nothing, and other runs print a warning. The manifest's `privacy` field records the method, the result and the location. An administrator can still take ownership of the directory on any of them.
 
 ```
 fc-export-<fid>-<UTC>/
@@ -68,7 +69,7 @@ Reason codes come from a closed set: `self_follow`, `hidden_by_client`, `client_
 
 **What `castsnap` never handles.** A seed phrase, a recovery phrase or a custody key.
 
-**Where exports go.** By default, a new directory under `~/FarcasterExports/`; `--out` changes the parent directory. The repo's `.gitignore` also excludes `fc-export-*`, `quick-*/` and `FarcasterExports/` as a second safeguard.
+**Where exports go.** By default, a new directory under `~/FarcasterExports/`; `--out` changes the parent directory. With `--private`, castsnap checks the directory's location before the token prompt. It refuses a synced folder (OneDrive, or on macOS iCloud Drive, Dropbox or other cloud storage), a network or WSL path, a network drive or mount, a FAT32 or exFAT disk, which has no permissions, and on Windows a drive whose type it can't read. It warns about a removable drive, a FUSE file system, a location it can't check and, on Windows, a folder whose name looks synced. Runs without `--private` only warn. `--allow-unsafe-location` turns a refusal into a warning; the manifest records the option (`options.allowUnsafeLocation`) and the location (`privacy.location`). The repo's `.gitignore` also excludes `fc-export-*`, `quick-*/` and `FarcasterExports/` as a second safeguard.
 
 ## Data sources
 
@@ -109,7 +110,7 @@ Reason codes come from a closed set: `self_follow`, `hidden_by_client`, `client_
 | AC-13 | P0 | **Casts, reactions and links:** for each store, the exported message count equals `storageLimitsByFid.used`, captured before and after the run. |
 | AC-14 | P0 | **Profile:** username, display name, bio, profile picture and URL match exactly between the protocol's `userData` and the client profile. |
 | AC-15 | P0 | **Portability:** every `normalized/` file validates against its JSON Schema with 0 errors. Each CSV parses with a standard parser, and its row count equals the matching JSON count. An offline import-check script (`scripts/import-check.mjs`) rebuilds following, followers, and bookmarks with cast text, using no network access. |
-| AC-16 | P0 | **Security:** a search of the export and of the repo for the token finds 0 hits; this is also tested with a sentinel fake token. `git status` shows no export files. The export directory mode is 0700; this holds on macOS and Linux, and fails on Windows, where castsnap can't set it. |
+| AC-16 | P0 | **Security:** a search of the export and of the repo for the token finds 0 hits; this is also tested with a sentinel fake token. `git status` shows no export files. On macOS and Linux, the export directory mode is 0700. On Windows, the directory's permission list has its inheritance removed and a user account as owner, and no item in the export gives another account access (hands-on test pending). |
 | AC-17 | P1 | **Channels:** pagination is exhausted, and the count equals the length of the client's channel list. |
 | AC-18 | P1 | **DMs:** pagination is exhausted for every conversation. In a manual check of the oldest message in 3 conversations you pick, 3 of 3 are found. |
 | AC-19 | P1 | **Media:** 100% of embed URLs have a recorded final status, and ≥ 95% of image URLs in the account's own casts and bookmarked casts are downloaded and stored by hash. |

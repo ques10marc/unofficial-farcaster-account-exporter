@@ -20,7 +20,7 @@ For example:
 
 - the token is written to disk, printed, logged, or left in an error message;
 - the token is sent anywhere other than `https://client.farcaster.xyz` or `https://farcaster.xyz/~api`, or is sent along a redirect;
-- an export folder or file can be read by other users of the same computer;
+- an export folder or file can be read by other users of the same computer, for example because its Windows permission list gives other accounts access;
 - private data is sent anywhere other than the user's own disk;
 - a dependency behaves maliciously.
 

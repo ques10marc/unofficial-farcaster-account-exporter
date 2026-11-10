@@ -4,7 +4,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { ClientApi, CLIENT_BASES } from './client.ts';
 import { findInExport, formatHits } from './find.ts';
+import { applyLocation, checkLocation } from './location.ts';
 import { parseMediaScope } from './media.ts';
+import { osDeps, PrivacyError } from './permissions.ts';
 import { normalizeBase, readSessionToken, redactRegistered, TOKEN_HOSTS, tokenHostAllowed } from './secrets.ts';
 import { statusFromMe, statusLine } from './status.ts';
 import { interrupt, VERSION } from './util.ts';
@@ -15,7 +17,7 @@ import { interrupt, VERSION } from './util.ts';
 const USAGE = `castsnap ${VERSION} - export a verifiable snapshot of one Farcaster account
 
 Usage:
-  castsnap export --fid N [--out DIR] [--private] [--media own,bookmarks|own|bookmarks|none] [--hub HOST] [--base URL]
+  castsnap export --fid N [--out DIR] [--private] [--allow-unsafe-location] [--media own,bookmarks|own|bookmarks|none] [--hub HOST] [--base URL]
   castsnap auth-check --fid N [--base URL]
   castsnap verify DIR [--json]
   castsnap find DIR <query>
@@ -26,7 +28,11 @@ export      Protocol data (gRPC ${'snap.farcaster.xyz:3383'}, falling back only 
             --private  also export bookmarks, direct casts, drafts, mutes, favourite mini apps, and
                        your own moderation record and stayed list as the app shows them,
                        using your web session token (hidden prompt, or FC_SESSION_TOKEN). The token is
-                       checked against --fid before anything is written.
+                       checked against --fid before anything is written. The export folder is made
+                       readable by your account only; if that fails, nothing is written.
+            --allow-unsafe-location
+                       let --private write to a synced, network or no-permission location, which it
+                       otherwise refuses before the token prompt (other runs only warn)
             --media    which casts' media to download (default own,bookmarks; bookmarks needs --private)
             --hub      gRPC host:port, or an https:// HTTP API base, tried first. Nodes other than
                        snap.farcaster.xyz and crackle.farcaster.xyz get no fallback
@@ -65,7 +71,7 @@ const parseOrUndefined = (s?: string): unknown => {
 };
 
 function parseFlags(argv: string[], allowed: Set<string>) {
-  const o: { fid?: number; out: string; media: string; hub?: string; base?: string; private: boolean } = { out: path.join(os.homedir(), 'FarcasterExports'), media: DEFAULT_MEDIA, private: false };
+  const o: { fid?: number; out: string; media: string; hub?: string; base?: string; private: boolean; allowUnsafeLocation: boolean } = { out: path.join(os.homedir(), 'FarcasterExports'), media: DEFAULT_MEDIA, private: false, allowUnsafeLocation: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (!allowed.has(a)) throw new UsageError(named('unknown argument', a));
@@ -86,6 +92,7 @@ function parseFlags(argv: string[], allowed: Set<string>) {
       if (!tokenHostAllowed(v)) throw new UsageError(`--base must be ${TOKEN_HOSTS.join(' or ')}, or a loopback address (http://127.0.0.1:PORT) for testing`);
       o.base = v;
     } else if (a === '--private') o.private = true;
+    else if (a === '--allow-unsafe-location') o.allowUnsafeLocation = true;
   }
   if (!Number.isInteger(o.fid) || (o.fid as number) <= 0) throw new UsageError('--fid must be a positive integer');
   return o as typeof o & { fid: number };
@@ -102,7 +109,18 @@ export async function main(argv: string[]): Promise<number> {
     return 0;
   }
   if (cmd === 'export') {
-    const o = parseFlags(rest, new Set(['--fid', '--out', '--media', '--hub', '--base', '--private']));
+    const o = parseFlags(rest, new Set(['--fid', '--out', '--media', '--hub', '--base', '--private', '--allow-unsafe-location']));
+    // Where the export goes, checked before the token prompt: a refused --private run asks for nothing.
+    const location = checkLocation(o.out, osDeps());
+    try {
+      applyLocation(location, o, (s) => console.error(s));
+    } catch (e) {
+      if (e instanceof PrivacyError) {
+        console.error(e.message);
+        return 1;
+      }
+      throw e;
+    }
     const token = o.private ? (await getToken()).token : undefined;
     const { AuthCheckError, runExport } = await import('./export.ts');
     process.on('SIGINT', () => {
@@ -111,10 +129,10 @@ export async function main(argv: string[]): Promise<number> {
       console.log('\nInterrupted: finishing the current request, then writing the manifest...');
     });
     try {
-      const r = await runExport({ ...o, token });
+      const r = await runExport({ ...o, token, location });
       return r.exitCode;
     } catch (e) {
-      if (e instanceof AuthCheckError) {
+      if (e instanceof AuthCheckError || e instanceof PrivacyError) {
         console.error(redactRegistered(e.message));
         return 1;
       }

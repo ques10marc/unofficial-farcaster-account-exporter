@@ -79,12 +79,20 @@ export class ExportWriter {
     this.root = root;
   }
 
-  // Creates <outParent>/fc-export-<fid>-<UTC>. Fails if it already exists.
-  static create(outParent: string, fid: number, now = new Date()): ExportWriter {
+  // Creates <outParent>/fc-export-<fid>-<UTC>. Fails if it already exists. protect runs while the folder
+  // is still empty (owner-only permissions are in place before any file is written); if it throws, the
+  // empty folder is removed (non-recursive rmdir can remove nothing else) and the error passes on.
+  static create(outParent: string, fid: number, now = new Date(), protect?: (root: string) => void): ExportWriter {
     fs.mkdirSync(outParent, { recursive: true, mode: 0o700 });
     const root = path.join(path.resolve(outParent), `fc-export-${fid}-${utcStamp(now)}`);
     fs.mkdirSync(root, { mode: 0o700 });
     fs.chmodSync(root, 0o700);
+    try {
+      protect?.(root);
+    } catch (e) {
+      fs.rmdirSync(root);
+      throw e;
+    }
     return new ExportWriter(root);
   }
 

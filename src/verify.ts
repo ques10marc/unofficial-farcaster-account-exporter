@@ -24,6 +24,7 @@ import { Ajv2020 } from 'ajv/dist/2020.js';
 import { parseCsv } from './csv.ts';
 import { FARCASTER_EPOCH_S, type KeyEvent, type KeyUse, keyOf, messageData, shortKey, walkGaslessKey } from './gasless.ts';
 import { PROFILE_FIELDS } from './normalize.ts';
+import { checkOwnerOnly, type OsDeps, osDeps, readWindowsAcls } from './permissions.ts';
 import { followersTolerance } from './reconcile.ts';
 import { scanTreeForSecret, tokenFromEnv } from './secrets.ts';
 import { pickStatus, recordCounts, statusLine } from './status.ts';
@@ -70,7 +71,7 @@ const INFO_SOURCES = new Set(['client:moderation-record', 'client:following-stay
 const okStatus = (s: string) => /^(complete|empty|unavailable:.+)$/.test(s);
 const finished = (s: string | undefined) => s === 'complete' || s === 'empty';
 
-export async function verifyExport(dir: string, opts: { env?: NodeJS.ProcessEnv; progress?: (s: string) => void } = {}): Promise<{ checks: Check[]; exitCode: number }> {
+export async function verifyExport(dir: string, opts: { env?: NodeJS.ProcessEnv; progress?: (s: string) => void; os?: Partial<OsDeps> } = {}): Promise<{ checks: Check[]; exitCode: number }> {
   const root = path.resolve(dir);
   const checks: Check[] = [];
   const add = (id: string, verdict: Verdict, detail: string[], manual?: string[]) => checks.push({ id, verdict, detail, ...(manual ? { manual } : {}) });
@@ -445,21 +446,38 @@ export async function verifyExport(dir: string, opts: { env?: NodeJS.ProcessEnv;
   // ---------- AC-16 (export side; the repo search and git status are checked outside) ----------
   {
     const detail: string[] = [];
-    const rootMode = fs.statSync(root).mode & 0o777;
-    let badDirs = 0;
-    let badFiles = 0;
-    const walk = (d: string) => {
-      for (const e of fs.readdirSync(d, { withFileTypes: true })) {
-        const q = path.join(d, e.name);
-        const mode = fs.lstatSync(q).mode & 0o777;
-        if (e.isDirectory()) {
-          if (mode !== 0o700) badDirs++;
-          walk(q);
-        } else if (mode !== 0o600 && !/^\.DS_Store$|^\._/.test(e.name)) badFiles++;
+    const sys = osDeps(opts.os);
+    let permsOk: boolean;
+    if (sys.platform === 'win32') {
+      // The same rules as the export's own read-back (checkOwnerOnly), over every item. No security IDs printed.
+      const read = readWindowsAcls(root, sys, true);
+      if (!read.ok) {
+        permsOk = false;
+        detail.push(`Windows permissions (security IDs) could not be read: ${read.problem}`);
+      } else {
+        const c = checkOwnerOnly(read.entries);
+        permsOk = c.ok;
+        detail.push(`Windows permissions (security IDs): inheritance removed: ${c.inheritanceRemoved ? 'yes' : 'no'}; items giving access to other accounts: ${c.itemsGivingOthers} of ${c.total}`);
+        if (!c.ok) detail.push(`Windows permissions not owner-only: ${c.problems.join('; ')}`);
       }
-    };
-    walk(root);
-    detail.push(`export directory mode ${rootMode.toString(8)}; sub-directories not 0700: ${badDirs}; files not 0600: ${badFiles}`);
+    } else {
+      const rootMode = fs.statSync(root).mode & 0o777;
+      let badDirs = 0;
+      let badFiles = 0;
+      const walk = (d: string) => {
+        for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+          const q = path.join(d, e.name);
+          const mode = fs.lstatSync(q).mode & 0o777;
+          if (e.isDirectory()) {
+            if (mode !== 0o700) badDirs++;
+            walk(q);
+          } else if (mode !== 0o600 && !/^\.DS_Store$|^\._/.test(e.name)) badFiles++;
+        }
+      };
+      walk(root);
+      detail.push(`export directory mode ${rootMode.toString(8)}; sub-directories not 0700: ${badDirs}; files not 0600: ${badFiles}`);
+      permsOk = rootMode === 0o700 && badDirs === 0 && badFiles === 0;
+    }
     const token = tokenFromEnv(opts.env);
     let hits = 0;
     if (token) {
@@ -471,7 +489,7 @@ export async function verifyExport(dir: string, opts: { env?: NodeJS.ProcessEnv;
     // A --private run always had the token in memory, so its own scan must have run and found nothing.
     const runScanOk = isPrivate ? m.tokenScan?.ran === true && m.tokenScan.filesWithToken === 0 : (m.tokenScan?.filesWithToken ?? 0) === 0;
     if (isPrivate) detail.push(`private run: the export's own scan with the token it used ${m.tokenScan?.ran ? `ran, ${m.tokenScan.filesWithToken} file(s) with the token` : 'did NOT run'}: ${runScanOk ? 'ok' : 'FAIL'}`);
-    add('AC-16', rootMode === 0o700 && badDirs === 0 && badFiles === 0 && hits === 0 && runScanOk ? 'PASS' : 'FAIL', detail);
+    add('AC-16', permsOk && hits === 0 && runScanOk ? 'PASS' : 'FAIL', detail);
   }
 
   // ---------- AC-17 (P1) ----------

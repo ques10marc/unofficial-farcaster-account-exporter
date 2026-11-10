@@ -57,6 +57,8 @@ import { makeRedactor, registerSecret, safeErrorText, scanTreeForSecrets, tokenF
 import { pickStatus, shapeNote, statusFromMe, statusFromProfile, statusLine, type StatusFields } from './status.ts';
 import { errMessage, fcTimeToIso, fromHex, interrupt, LIBRARIES, toHex, VERSION } from './util.ts';
 import { ExportWriter } from './writer.ts';
+import { applyLocation, checkLocation, type Location, type LocationKind } from './location.ts';
+import { makeOwnerOnly, type OsDeps, osDeps, type OwnerOnlyResult, PrivacyError } from './permissions.ts';
 
 export const DEFAULT_GRPC = 'snap.farcaster.xyz:3383';
 // Farcaster's own public Snapchain nodes; snapchain lists both in src/network/mesh/nodes.rs. castsnap falls back only
@@ -100,7 +102,11 @@ export interface Manifest {
   finishedAt?: string;
   node: string;
   libraries: typeof LIBRARIES;
-  options: { media: string; hub: string | null; private: boolean; base: string | null };
+  // allowUnsafeLocation and privacy are absent from exports made before they existed.
+  options: { media: string; hub: string | null; private: boolean; base: string | null; allowUnsafeLocation?: boolean };
+  // Whether the export folder was made readable by the user's account only, and the kind of location.
+  // Fixed words only: no security ID, path, mount point or volume name.
+  privacy?: { method: OwnerOnlyResult['method']; ownerOnly: boolean; location: { kind: LocationKind; label: string }; note: string };
   hosts: { protocol: string[]; client: string[] };
   // --private only: the /v2/me check made before anything was written.
   authCheck?: { host: string; fid: number; attempts: { base: string; status: number }[] };
@@ -140,6 +146,12 @@ export interface ExportOptions {
   log?: (s: string) => void;
   now?: () => Date;
   env?: NodeJS.ProcessEnv;
+  // Operating-system access (platform, child commands), replaced in tests.
+  os?: Partial<OsDeps>;
+  // --allow-unsafe-location: --private may write to a synced, network or no-permission location.
+  allowUnsafeLocation?: boolean;
+  // The location check's result, when the caller (cli.ts) already ran it and showed any warning.
+  location?: Location;
 }
 
 export interface ExportResult {
@@ -215,6 +227,12 @@ export async function runExport(opts: ExportOptions): Promise<ExportResult> {
   if (!scope) throw new Error(`invalid media scope: ${opts.media}`);
   const client = opts.client ?? new ClientApi({ log, token, bases: opts.base ? [opts.base] : CLIENT_BASES, explicitBase: Boolean(opts.base) });
 
+  // Where the export goes, checked before the token is sent. cli.ts checks it before the token prompt and
+  // passes the result in, having shown any warning; other callers get the check and the warning here.
+  const d = osDeps(opts.os);
+  const where = opts.location ?? checkLocation(opts.out, d);
+  applyLocation(where, { private: Boolean(opts.private), allowUnsafeLocation: opts.allowUnsafeLocation }, opts.location ? () => {} : log);
+
   // Private runs: identify the token's account before anything is written.
   let auth: AuthCheck | undefined;
   if (opts.private) {
@@ -224,7 +242,15 @@ export async function runExport(opts: ExportOptions): Promise<ExportResult> {
   }
 
   const transports = opts.transports ?? defaultTransports(opts.hub);
-  const writer = ExportWriter.create(opts.out, fid, now());
+  // Owner-only permissions are set and read back while the folder is still empty. --private stops if that
+  // fails (the empty folder is removed); public runs warn and continue.
+  const own: { r?: OwnerOnlyResult } = {};
+  const writer = ExportWriter.create(opts.out, fid, now(), (root) => {
+    own.r = makeOwnerOnly(root, d);
+    if (!own.r.ok && opts.private) throw new PrivacyError(`castsnap: --private stopped: the export folder could not be made readable by your account only (${own.r.problem}). Nothing was written.`);
+  });
+  const owner = own.r as OwnerOnlyResult;
+  if (!owner.ok) log(`castsnap: warning: the export folder could not be made readable by your account only (${owner.problem}).`);
 
   const manifest: Manifest = {
     tool: 'castsnap',
@@ -234,7 +260,13 @@ export async function runExport(opts: ExportOptions): Promise<ExportResult> {
     startedAt: now().toISOString(),
     node: process.version,
     libraries: LIBRARIES,
-    options: { media: opts.media, hub: opts.hub ?? null, private: Boolean(opts.private), base: opts.base ?? null },
+    options: { media: opts.media, hub: opts.hub ?? null, private: Boolean(opts.private), base: opts.base ?? null, allowUnsafeLocation: Boolean(opts.allowUnsafeLocation) },
+    privacy: {
+      method: owner.method,
+      ownerOnly: owner.ok,
+      location: { kind: where.kind, label: where.label },
+      note: owner.ok ? 'owner-only permissions were set and read back' : (owner.problem ?? 'not owner-only'),
+    },
     hosts: { protocol: transports.map((t) => t.label), client: client.bases },
     ...(auth ? { authCheck: { host: auth.base, fid: auth.fid!, attempts: auth.attempts.map((a) => ({ base: a.base, status: a.status })) } } : {}),
     datasets: {},
@@ -250,6 +282,7 @@ export async function runExport(opts: ExportOptions): Promise<ExportResult> {
   log(`Account: fid ${fid}${auth?.username ? ` (@${auth.username})` : ''}`);
   if (auth) log(`Token:   ${auth.message}`);
   log(`Output:  ${writer.root}`);
+  log(`Privacy: ${owner.ok ? 'readable by your account only' : 'NOT limited to your account'} (${owner.method}); location: ${where.label}${opts.allowUnsafeLocation && where.level === 'refuse' ? ', allowed by --allow-unsafe-location' : ''}`);
   log('Fetching:');
   const report = (name: string) => {
     const s = S[name];
