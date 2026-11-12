@@ -257,6 +257,8 @@ Other commands:
 
 ## Output
 
+Every file and field is described in [FIELDS.md](FIELDS.md).
+
 - **`manifest.json`** holds every source's host, pages, final-cursor state and status, plus the status of each dataset D1–D15, D19 and D20, and the account status (`accountStatus`; see [Account status](#account-status)). A `--private` run also records the token check (`authCheck`: the host and FID, never the token) and one entry per DM conversation (`directCasts`).
 - **`SHA256SUMS`** works with `shasum -a 256 -c SHA256SUMS`, or `sha256sum -c SHA256SUMS`. In PowerShell, use `Get-FileHash` as shown under [Windows](#windows-powershell-and-git-bash). It never lists OS metadata such as `.DS_Store`, which Finder may add later.
 - **`raw/protocol/*.pb`** are length-delimited protobuf `Message`/`OnChainEvent` records, with the signed `dataBytes` intact. **`raw/protocol/*.jsonl`** holds the same records as JSON.
@@ -274,10 +276,7 @@ Every export prints one line just before `Files:`, and `auth-check` prints it af
 Account status: optInStatus=pending publicSpamLabel="2 (unlikely to engage in spammy behavior)" (from profile-after)
 ```
 
-- **`optInStatus`** is what the app reports for your account. The app's code checks for `pending` and `moderated_out`, and `opted_in` is the third value reported. As far as is known, `pending` means you haven't accepted the Network Code (a No vote reads the same), and `moderated_out` means the app has restricted the account.
-- **`publicSpamLabel`** is the app's public spam label for the account. `/v2/me` doesn't carry it, so `auth-check`'s line leaves it out.
-- **`nerfed=true`** appears only when the app reports it. The app describes a nerfed account as one that can still post to the protocol but doesn't appear in the Farcaster app.
-- **`(not reported)`** means the answer had no such field, and **`not available`** means castsnap got no readable profile.
+What each part of the line means is in [FIELDS.md](FIELDS.md#the-account-status-line). **`(not reported)`** means the answer had no such field, and **`not available`** means castsnap got no readable profile.
 
 The line comes from the profile the export fetched last. `manifest.json` keeps every value under `accountStatus`, and a `--private` run adds what `/v2/me` reports, including `neynarScore` and `enabledFeatureFlags`. castsnap copies these values as the app sent them; what they mean may change. The line itself is safe to share.
 

@@ -17,6 +17,8 @@
 
 Each run writes a new folder under `~/FarcasterExports/` that only your account can read. On macOS and Linux, castsnap sets modes 0700 and 0600. On Windows, it removes the inherited permissions and gives only your account access (hands-on test pending). An administrator can still get at the folder on any of them.
 
+Every file and field in an export is described in [docs/FIELDS.md](docs/FIELDS.md).
+
 **The export format is experimental.** It is schemaVersion 1, and a schemaVersion 2 is planned, so files and fields may change.
 
 ## If your account was banned or restricted

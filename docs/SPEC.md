@@ -55,7 +55,7 @@ fc-export-<fid>-<UTC>/
   reconciliation.json    differences between the protocol and the app, each with a reason code
 ```
 
-Reason codes come from a closed set: `self_follow`, `hidden_by_client`, `client_only`, `count_mismatch`, `profile_field_mismatch`. File-by-file detail is in [USAGE.md](USAGE.md) "Output".
+Reason codes come from a closed set: `self_follow`, `hidden_by_client`, `client_only`, `count_mismatch`, `profile_field_mismatch`. File-by-file detail is in [USAGE.md](USAGE.md) "Output", and field-by-field detail in [FIELDS.md](FIELDS.md).
 
 **Exports from before the rename.** castsnap was called `fcx` until 2026-10-31. An export written then says `"tool": "fcx"` in `manifest.json`, and its schemas carry `$id`s under `https://fcx.local/schemas/v1/`. `castsnap verify` and `scripts/import-check.mjs` read it exactly as they read a current export. Both `https://fcx.local/schemas/v1/…` and `https://castsnap.local/schemas/v1/…` identify schemaVersion 1, so the new `$id` is not a format change.
 

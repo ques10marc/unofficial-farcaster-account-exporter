@@ -13,6 +13,7 @@
   },
   "scripts": {
     "castsnap": "node bin/castsnap.js",
+    "fields": "node scripts/fields-md.ts",
     "test": "node --test \"test/**/*.test.ts\"",
     "typecheck": "tsc -p tsconfig.json"
   },
