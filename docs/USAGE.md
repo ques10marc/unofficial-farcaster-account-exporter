@@ -173,7 +173,7 @@ The paths, result keys and page sizes come from the official client's `types.yml
 | D20 stayed list | `GET /v2/opt-in/following-stayed`, one request | `raw/client/following-stayed/`, as it came; not normalized |
 | D14 media | every embed URL of your casts and your bookmarked casts | `media/index.jsonl`, `media/sha256/` |
 
-Every successful response is saved verbatim under `raw/client/`. Error responses are saved truncated, with the token redacted, as `error-NNNN.json`.
+Every successful response is saved verbatim under `raw/client/`. Error responses are saved with the token redacted, then truncated, as `error-NNNN.json`.
 
 D19 and D20 are not in `types.yml`: their paths and page size come from the web app's own code (2026-11). Their answers' shapes aren't documented, so castsnap keeps the pages as they came and counts the entries where it can. A refusal is the dataset's status, for example `unavailable:403`, or `unavailable:no-result` for an answer without a result. D19 and D20 never make the export fail.
 

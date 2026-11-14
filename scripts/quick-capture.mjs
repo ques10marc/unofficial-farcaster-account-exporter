@@ -179,7 +179,7 @@ async function request(urlPath, params, { auth }) {
 // The same line castsnap prints (src/status.ts), from the pages saved below; test/account-status.test.ts
 // keeps the two in step. Also the counting for the moderation record and the stayed list.
 const asObject = (v) => (v !== null && typeof v === 'object' && !Array.isArray(v) ? v : undefined);
-const showValue = (v) => (typeof v === 'string' && /^[A-Za-z0-9_.-]{1,40}$/.test(v) ? v : (JSON.stringify(v) ?? String(v)).slice(0, 120));
+const showValue = (v) => (typeof v === 'string' && /^[A-Za-z0-9_.-]{1,40}$/.test(v) ? v : redact(JSON.stringify(v) ?? String(v)).slice(0, 120));
 function statusOf(body, from) {
   const result = asObject(asObject(body)?.result);
   const user = asObject(result?.user);

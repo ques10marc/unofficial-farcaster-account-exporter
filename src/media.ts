@@ -91,16 +91,18 @@ const STORE_KINDS = new Set<MediaKind>(['image', 'video', 'audio', 'document']);
 
 export function isPrivateAddress(ip: string): boolean {
   if (net.isIPv4(ip)) {
-    const [a, b] = ip.split('.').map(Number);
-    return a === 0 || a === 10 || a === 127 || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || a >= 224;
+    const [a, b, c] = ip.split('.').map(Number);
+    return a === 0 || a === 10 || a === 127 || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || a >= 224 || (a === 192 && b === 0 && (c === 0 || c === 2)) || (a === 198 && b === 51 && c === 100) || (a === 203 && b === 0 && c === 113);
   }
   if (net.isIPv6(ip)) {
     const g = ipv6Groups(ip);
     const zero = (from: number, to: number) => g.slice(from, to).every((x) => x === 0);
     // IPv4 inside IPv6: mapped (::ffff:a.b.c.d, which URLs spell ::ffff:7f00:1) and NAT64 (64:ff9b::/96).
     if ((zero(0, 5) && g[5] === 0xffff) || (g[0] === 0x64 && g[1] === 0xff9b && zero(2, 6))) return isPrivateAddress(`${g[6] >> 8}.${g[6] & 255}.${g[7] >> 8}.${g[7] & 255}`);
+    if (g[0] === 0x64 && g[1] === 0xff9b && g[2] === 1) return true; // local-use NAT64 (64:ff9b:1::/48), refused outright
+    if (zero(0, 4) && g[4] === 0xffff && g[5] === 0) return true; // IPv4-translated (::ffff:0:0:0/96), refused outright
     if (zero(0, 6)) return true; // the rest of ::/96: unspecified, loopback, the old IPv4-compatible form
-    return (g[0] & 0xfe00) === 0xfc00 || (g[0] & 0xffc0) === 0xfe80 || g[0] >= 0xff00; // unique local, link-local, multicast
+    return (g[0] & 0xfe00) === 0xfc00 || (g[0] & 0xffc0) === 0xfe80 || g[0] >= 0xff00 || (g[0] & 0xffc0) === 0xfec0 || g[0] === 0x2002 || (g[0] === 0x2001 && (g[1] === 0 || g[1] === 0x0db8)); // unique local, link-local, multicast, site-local, 6to4, Teredo, documentation
   }
   return false;
 }
@@ -152,12 +154,14 @@ function checkedLookup(resolve: Resolver, refuse: (ip: string) => boolean): net.
 
 // fetch() for media over node:http(s), connecting through checkedLookup; fetch() itself would look the
 // host up again. It sends fetch()'s user-agent and asks for the body unencoded: nothing here decodes one,
-// so an encoded body is refused. `refuse` is replaceable only so tests can reach a local server.
+// so an encoded body is refused. `refuse` is replaceable only so tests can reach a local server. It
+// connects directly (agent: false): through a proxy set in the environment, the proxy would look the host
+// up instead, and checkedLookup would never see it.
 export function checkedFetch(resolve: Resolver, refuse: (ip: string) => boolean = isPrivateAddress): typeof fetch {
   return ((url: URL, init: RequestInit = {}) =>
     new Promise<Response>((ok, fail) => {
       const headers = { 'user-agent': 'node', ...Object.fromEntries(new Headers(init.headers)), 'accept-encoding': 'identity' };
-      const req = (url.protocol === 'https:' ? https : http).request(url, { headers, lookup: checkedLookup(resolve, refuse), signal: init.signal ?? undefined }, (res) => {
+      const req = (url.protocol === 'https:' ? https : http).request(url, { agent: false, headers, lookup: checkedLookup(resolve, refuse), signal: init.signal ?? undefined }, (res) => {
         try {
           const encoding = res.headers['content-encoding'];
           if (encoding && encoding.toLowerCase() !== 'identity') throw new Error(`refused content-encoding ${encoding}`);

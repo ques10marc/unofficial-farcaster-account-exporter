@@ -474,7 +474,7 @@ Sources: `src/export.ts#runExport`.
 
 Moderation record, refused or unreadable answer. Datasets: D19.
 
-- Written when the app refuses a page (an HTTP status other than 200) and sends a body, or answers with something that isn't JSON or has no `result`. It holds the app's answer cut to its first 2,000 characters, then with any copy of your token replaced by `[REDACTED]`. Its number follows the last good page. (Basis: from castsnap's code)
+- Written when the app refuses a page (an HTTP status other than 200) and sends a body, or answers with something that isn't JSON or has no `result`. It holds the app's answer with any copy of your token replaced by `[REDACTED]`, then cut to its first 2,000 characters. Its number follows the last good page. (Basis: from castsnap's code)
 - It may not parse as JSON: the answer may not have been JSON, and the cut can fall partway through. (Basis: from castsnap's code)
 
 No fields are described: see the lines above.
@@ -502,7 +502,7 @@ Sources: `src/export.ts#runExport`.
 
 Stayed list, refused or unreadable answer. Datasets: D20.
 
-- Written when the app refuses a page (an HTTP status other than 200) and sends a body, or answers with something that isn't JSON or has no `result`. It holds the app's answer cut to its first 2,000 characters, then with any copy of your token replaced by `[REDACTED]`. castsnap asks for one page, so it is always number 0001. (Basis: from castsnap's code)
+- Written when the app refuses a page (an HTTP status other than 200) and sends a body, or answers with something that isn't JSON or has no `result`. It holds the app's answer with any copy of your token replaced by `[REDACTED]`, then cut to its first 2,000 characters. castsnap asks for one page, so it is always number 0001. (Basis: from castsnap's code)
 - It may not parse as JSON: the answer may not have been JSON, and the cut can fall partway through. (Basis: from castsnap's code)
 
 No fields are described: see the lines above.
@@ -1209,7 +1209,7 @@ Sources: `src/export.ts#runExport`, `src/csv.ts#toCsv`.
 Media index. Datasets: D14.
 
 - One JSON object per line, one per distinct embed URL: from your own casts, from your bookmarks, or both, as --media chooses. Written whenever --media includes own or bookmarks. (Basis: from castsnap's code)
-- castsnap follows redirects itself, one hop at a time and at most 5. Before the first request and each redirect, it refuses a scheme other than http and https, a host named localhost or ending in .localhost, and a host that is or resolves to a loopback, private, shared (100.64.0.0/10), link-local, unique-local, multicast, reserved (240.0.0.0/4) or unspecified address. It stores an image, video, audio file or PDF under media/sha256/, named by its SHA-256; other content is listed but not stored. (Basis: from castsnap's code)
+- castsnap follows redirects itself, one hop at a time and at most 5. Before the first request and each redirect, it refuses a scheme other than http and https, a host named localhost or ending in .localhost, and a host that is or resolves to a loopback, private, shared (100.64.0.0/10), link-local, site-local (fec0::/10), unique-local, multicast, reserved (240.0.0.0/4), IETF protocol (192.0.0.0/24), documentation (192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24 or 2001:db8::/32) or unspecified address. It also refuses a host that is or resolves to any 6to4 (2002::/16), Teredo (2001::/32), local-use NAT64 (64:ff9b:1::/48), IPv4-translated (::ffff:0:0:0/96) or IPv4-compatible (::/96) address, or to an IPv4-mapped or NAT64 (64:ff9b::/96) address holding an IPv4 address it refuses. It connects to the media host directly, never through a proxy set in the environment. It stores an image, video, audio file or PDF under media/sha256/, named by its SHA-256; other content is listed but not stored. (Basis: from castsnap's code)
 
 | Field | Type | Meaning | Basis | Sources |
 | --- | --- | --- | --- | --- |
@@ -1394,7 +1394,7 @@ Sources: `src/export.ts#runExport`, `src/client.ts#ClientApi.getObject`, `src/pr
 
 Muted keywords, refused or unreadable answer. Datasets: D12.
 
-- Written when the request ends without a JSON answer with HTTP status 200: the app refuses it (any other status), answers with something that isn't JSON, or no answer arrives. It holds the answer cut to its first 4,000 characters, then with any copy of your token replaced by `[REDACTED]`. When no answer arrives (the network still fails after castsnap's retries, or castsnap refuses to send the token to that host), the file is written empty. (Basis: from castsnap's code)
+- Written when the request ends without a JSON answer with HTTP status 200: the app refuses it (any other status), answers with something that isn't JSON, or no answer arrives. It holds the answer with any copy of your token replaced by `[REDACTED]`, then cut to its first 4,000 characters. When no answer arrives (the network still fails after castsnap's retries, or castsnap refuses to send the token to that host), the file is written empty. (Basis: from castsnap's code)
 - It may not parse as JSON: the answer may not have been JSON, and the cut can fall partway through. (Basis: from castsnap's code)
 
 No fields are described: see the lines above.
@@ -1421,7 +1421,7 @@ Sources: `src/export.ts#runExport`, `src/client.ts#ClientApi.getObject`, `src/pr
 
 Muted channels, refused or unreadable answer. Datasets: D12.
 
-- Written when the request ends without a JSON answer with HTTP status 200: the app refuses it (any other status), answers with something that isn't JSON, or no answer arrives. It holds the answer cut to its first 4,000 characters, then with any copy of your token replaced by `[REDACTED]`. When no answer arrives (the network still fails after castsnap's retries, or castsnap refuses to send the token to that host), the file is written empty. (Basis: from castsnap's code)
+- Written when the request ends without a JSON answer with HTTP status 200: the app refuses it (any other status), answers with something that isn't JSON, or no answer arrives. It holds the answer with any copy of your token replaced by `[REDACTED]`, then cut to its first 4,000 characters. When no answer arrives (the network still fails after castsnap's retries, or castsnap refuses to send the token to that host), the file is written empty. (Basis: from castsnap's code)
 - It may not parse as JSON: the answer may not have been JSON, and the cut can fall partway through. (Basis: from castsnap's code)
 
 No fields are described: see the lines above.
@@ -1484,7 +1484,7 @@ Sources: `src/export.ts#runExport`, `src/client.ts#ClientApi.paginate`, `src/nor
 
 Bookmarks, refused page or no answer. Datasets: D3.
 
-- Written when a page's request gets an HTTP status other than 200, or no answer arrives; castsnap stops there. A first page refused with 400 is asked again with a smaller limit first, and only the last refusal is written. It holds the answer cut to its first 2,000 characters, then with any copy of your token replaced by `[REDACTED]`. When no answer arrives (the network still fails after castsnap's retries, or castsnap refuses to send the token to that host), the file is written empty. Its number follows the last page written. No error file is written when the source ends any other way: complete; `empty`, when the last page is reached and no page held an item; stopped at a page it keeps (one that isn't JSON, a first page without the list, or a repeated cursor); interrupted; or failed inside castsnap. (Basis: from castsnap's code)
+- Written when a page's request gets an HTTP status other than 200, or no answer arrives; castsnap stops there. A first page refused with 400 is asked again with a smaller limit first, and only the last refusal is written. It holds the answer with any copy of your token replaced by `[REDACTED]`, then cut to its first 2,000 characters. When no answer arrives (the network still fails after castsnap's retries, or castsnap refuses to send the token to that host), the file is written empty. Its number follows the last page written. No error file is written when the source ends any other way: complete; `empty`, when the last page is reached and no page held an item; stopped at a page it keeps (one that isn't JSON, a first page without the list, or a repeated cursor); interrupted; or failed inside castsnap. (Basis: from castsnap's code)
 - It may not parse as JSON: the answer may not have been JSON, and the cut can fall partway through. (Basis: from castsnap's code)
 
 No fields are described: see the lines above.
@@ -1520,7 +1520,7 @@ Sources: `src/export.ts#runExport`, `src/client.ts#ClientApi.paginate`, `src/pri
 
 Direct-cast conversation lists, refused page or no answer. Datasets: D10.
 
-- Written when a page's request gets an HTTP status other than 200, or no answer arrives; castsnap stops there. A first page refused with 400 is asked again with a smaller limit first, and only the last refusal is written. It holds the answer cut to its first 2,000 characters, then with any copy of your token replaced by `[REDACTED]`. When no answer arrives (the network still fails after castsnap's retries, or castsnap refuses to send the token to that host), the file is written empty. Its number follows the last page written. No error file is written when the source ends any other way: complete; `empty`, when the last page is reached and no page held an item; stopped at a page it keeps (one that isn't JSON, a first page without the list, or a repeated cursor); interrupted; or failed inside castsnap. (Basis: from castsnap's code)
+- Written when a page's request gets an HTTP status other than 200, or no answer arrives; castsnap stops there. A first page refused with 400 is asked again with a smaller limit first, and only the last refusal is written. It holds the answer with any copy of your token replaced by `[REDACTED]`, then cut to its first 2,000 characters. When no answer arrives (the network still fails after castsnap's retries, or castsnap refuses to send the token to that host), the file is written empty. Its number follows the last page written. No error file is written when the source ends any other way: complete; `empty`, when the last page is reached and no page held an item; stopped at a page it keeps (one that isn't JSON, a first page without the list, or a repeated cursor); interrupted; or failed inside castsnap. (Basis: from castsnap's code)
 - It may not parse as JSON: the answer may not have been JSON, and the cut can fall partway through. (Basis: from castsnap's code)
 - CATEGORY is the list the pages come from: `default`, `archived`, `request` or `void`. castsnap reads all four, in that order. (Basis: from castsnap's code)
 
@@ -1559,7 +1559,7 @@ Sources: `src/export.ts#runExport`, `src/client.ts#ClientApi.paginate`, `src/pri
 
 Direct-cast messages, refused page or no answer. Datasets: D10.
 
-- Written when a page's request gets an HTTP status other than 200, or no answer arrives; castsnap stops there. A first page refused with 400 is asked again with a smaller limit first, and only the last refusal is written. It holds the answer cut to its first 2,000 characters, then with any copy of your token replaced by `[REDACTED]`. When no answer arrives (the network still fails after castsnap's retries, or castsnap refuses to send the token to that host), the file is written empty. Its number follows the last page written. No error file is written when the source ends any other way: complete; `empty`, when the last page is reached and no page held an item; stopped at a page it keeps (one that isn't JSON, a first page without the list, or a repeated cursor); interrupted; or failed inside castsnap. (Basis: from castsnap's code)
+- Written when a page's request gets an HTTP status other than 200, or no answer arrives; castsnap stops there. A first page refused with 400 is asked again with a smaller limit first, and only the last refusal is written. It holds the answer with any copy of your token replaced by `[REDACTED]`, then cut to its first 2,000 characters. When no answer arrives (the network still fails after castsnap's retries, or castsnap refuses to send the token to that host), the file is written empty. Its number follows the last page written. No error file is written when the source ends any other way: complete; `empty`, when the last page is reached and no page held an item; stopped at a page it keeps (one that isn't JSON, a first page without the list, or a repeated cursor); interrupted; or failed inside castsnap. (Basis: from castsnap's code)
 - It may not parse as JSON: the answer may not have been JSON, and the cut can fall partway through. (Basis: from castsnap's code)
 - Each conversation castsnap kept from the lists has its own folder, fetched in the order of its `index`. The folder's name is that `index` from normalized/dm-conversations.json, padded with zeros to at least four digits, a hyphen, then the conversation's ID with every character other than A-Z, a-z, 0-9, `.`, `_` and `-` replaced by `_`, cut to 80 characters. (Basis: from castsnap's code)
 - The messages source is one source for all conversations. When any conversation's messages don't end `complete` or `empty`, its status is `error:<n>-conversations-not-complete`, with n the number of those conversations, unless the run was interrupted. (Basis: from castsnap's code)
@@ -1607,7 +1607,7 @@ Sources: `src/export.ts#runExport`, `src/client.ts#ClientApi.paginate`, `src/nor
 
 Drafts, refused page or no answer. Datasets: D11.
 
-- Written when a page's request gets an HTTP status other than 200, or no answer arrives; castsnap stops there. A first page refused with 400 is asked again with a smaller limit first, and only the last refusal is written. It holds the answer cut to its first 2,000 characters, then with any copy of your token replaced by `[REDACTED]`. When no answer arrives (the network still fails after castsnap's retries, or castsnap refuses to send the token to that host), the file is written empty. Its number follows the last page written. No error file is written when the source ends any other way: complete; `empty`, when the last page is reached and no page held an item; stopped at a page it keeps (one that isn't JSON, a first page without the list, or a repeated cursor); interrupted; or failed inside castsnap. (Basis: from castsnap's code)
+- Written when a page's request gets an HTTP status other than 200, or no answer arrives; castsnap stops there. A first page refused with 400 is asked again with a smaller limit first, and only the last refusal is written. It holds the answer with any copy of your token replaced by `[REDACTED]`, then cut to its first 2,000 characters. When no answer arrives (the network still fails after castsnap's retries, or castsnap refuses to send the token to that host), the file is written empty. Its number follows the last page written. No error file is written when the source ends any other way: complete; `empty`, when the last page is reached and no page held an item; stopped at a page it keeps (one that isn't JSON, a first page without the list, or a repeated cursor); interrupted; or failed inside castsnap. (Basis: from castsnap's code)
 - It may not parse as JSON: the answer may not have been JSON, and the cut can fall partway through. (Basis: from castsnap's code)
 
 No fields are described: see the lines above.
@@ -1640,7 +1640,7 @@ Sources: `src/export.ts#runExport`, `src/client.ts#ClientApi.paginate`, `src/nor
 
 Muted accounts, refused page or no answer. Datasets: D12.
 
-- Written when a page's request gets an HTTP status other than 200, or no answer arrives; castsnap stops there. A first page refused with 400 is asked again with a smaller limit first, and only the last refusal is written. It holds the answer cut to its first 2,000 characters, then with any copy of your token replaced by `[REDACTED]`. When no answer arrives (the network still fails after castsnap's retries, or castsnap refuses to send the token to that host), the file is written empty. Its number follows the last page written. No error file is written when the source ends any other way: complete; `empty`, when the last page is reached and no page held an item; stopped at a page it keeps (one that isn't JSON, a first page without the list, or a repeated cursor); interrupted; or failed inside castsnap. (Basis: from castsnap's code)
+- Written when a page's request gets an HTTP status other than 200, or no answer arrives; castsnap stops there. A first page refused with 400 is asked again with a smaller limit first, and only the last refusal is written. It holds the answer with any copy of your token replaced by `[REDACTED]`, then cut to its first 2,000 characters. When no answer arrives (the network still fails after castsnap's retries, or castsnap refuses to send the token to that host), the file is written empty. Its number follows the last page written. No error file is written when the source ends any other way: complete; `empty`, when the last page is reached and no page held an item; stopped at a page it keeps (one that isn't JSON, a first page without the list, or a repeated cursor); interrupted; or failed inside castsnap. (Basis: from castsnap's code)
 - It may not parse as JSON: the answer may not have been JSON, and the cut can fall partway through. (Basis: from castsnap's code)
 
 No fields are described: see the lines above.
@@ -1675,7 +1675,7 @@ Sources: `src/export.ts#runExport`, `src/client.ts#ClientApi.paginate`, `src/nor
 
 Favourite mini apps, refused page or no answer. Datasets: D13.
 
-- Written when a page's request gets an HTTP status other than 200, or no answer arrives; castsnap stops there. A first page refused with 400 is asked again with a smaller limit first, and only the last refusal is written. It holds the answer cut to its first 2,000 characters, then with any copy of your token replaced by `[REDACTED]`. When no answer arrives (the network still fails after castsnap's retries, or castsnap refuses to send the token to that host), the file is written empty. Its number follows the last page written. No error file is written when the source ends any other way: complete; `empty`, when the last page is reached and no page held an item; stopped at a page it keeps (one that isn't JSON, a first page without the list, or a repeated cursor); interrupted; or failed inside castsnap. (Basis: from castsnap's code)
+- Written when a page's request gets an HTTP status other than 200, or no answer arrives; castsnap stops there. A first page refused with 400 is asked again with a smaller limit first, and only the last refusal is written. It holds the answer with any copy of your token replaced by `[REDACTED]`, then cut to its first 2,000 characters. When no answer arrives (the network still fails after castsnap's retries, or castsnap refuses to send the token to that host), the file is written empty. Its number follows the last page written. No error file is written when the source ends any other way: complete; `empty`, when the last page is reached and no page held an item; stopped at a page it keeps (one that isn't JSON, a first page without the list, or a repeated cursor); interrupted; or failed inside castsnap. (Basis: from castsnap's code)
 - It may not parse as JSON: the answer may not have been JSON, and the cut can fall partway through. (Basis: from castsnap's code)
 
 No fields are described: see the lines above.

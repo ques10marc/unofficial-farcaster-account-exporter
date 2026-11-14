@@ -16,7 +16,7 @@ import {
   UserNameProof,
   onChainEventTypeToJSON,
 } from '@farcaster/core';
-import { safeErrorText } from '../secrets.ts';
+import { redactThenCut, safeErrorText } from '../secrets.ts';
 import { fromB64, fromHex, toB64, toHex, USER_AGENT } from '../util.ts';
 import { isAllNullShardToken } from './paginate.ts';
 import { type EventPage, type MessagePage, type ProtocolTransport, type ShardBlock, type SignerPage, type Store, TransportError, unsupported } from './types.ts';
@@ -130,7 +130,7 @@ export class HttpTransport implements ProtocolTransport {
     }
     if (res.status !== 200) {
       const notFound = res.status === 404 || /NotFound|not found/i.test(raw);
-      throw new TransportError(`${this.label} ${path}: HTTP ${res.status} ${raw.slice(0, 200)}`, {
+      throw new TransportError(`${this.label} ${path}: HTTP ${res.status} ${redactThenCut(raw, 200)}`, {
         retryable: res.status === 429 || res.status >= 500,
         code: notFound ? 'not_found' : `http_${res.status}`,
       });

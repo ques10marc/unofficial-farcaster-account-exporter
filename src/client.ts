@@ -8,7 +8,7 @@
 // The session token is sent only on requests marked auth, only to the hosts in secrets.TOKEN_HOSTS (or a
 // loopback mock), and redirects are never followed with it.
 
-import { safeErrorText, tokenHostAllowed } from './secrets.ts';
+import { makeRedactor, redactRegistered, redactThenCut, safeErrorText, tokenHostAllowed } from './secrets.ts';
 import { interrupt, RateLimiter, sleep } from './util.ts';
 
 export const CLIENT_BASES = ['https://client.farcaster.xyz', 'https://farcaster.xyz/~api'];
@@ -16,11 +16,12 @@ const TIMEOUT_MS = 30_000;
 // Network errors (no response, or a body that fails mid-read) are retried with waits of 2, 4, 8, 16, 32
 // and then 60 s: about 5 minutes in all, enough to ride out a Wi-Fi reconnect.
 const NETWORK_ATTEMPTS = 10;
-// The first error message of an error body, for a note: "errors[0].message: …", at most 200 characters.
-const firstError = (text: string): string | undefined => {
+// The first error message of an error body, for a note: "errors[0].message: …", redacted, then cut to at
+// most 200 characters.
+const firstError = (text: string, redact: (s: unknown) => string): string | undefined => {
   try {
     const m = JSON.parse(text)?.errors?.[0]?.message;
-    return typeof m === 'string' ? `errors[0].message: ${m.slice(0, 200)}` : undefined;
+    return typeof m === 'string' ? `errors[0].message: ${redactThenCut(m, 200, redact)}` : undefined;
   } catch {
     return undefined;
   }
@@ -93,6 +94,9 @@ export class ClientApi {
   private readonly privateLimiter: RateLimiter;
   private readonly wait: (ms: number) => Promise<void>;
   private readonly log: (s: string) => void;
+  // Redacts this client's own token as well as every registered one, so its cuts never depend on a
+  // caller having registered the token.
+  private readonly redact: (s: unknown) => string;
   requests = 0;
   // Set once a request has used up its network retries. Later requests then try once each until a
   // response gets through, so a long outage costs one full set of retries, not one per request.
@@ -108,6 +112,8 @@ export class ClientApi {
     this.limiter = opts.limiter ?? new RateLimiter({ windows: [{ max: 20, ms: 10_000 }, { max: 500, ms: 3_600_000 }], minGapMs: 500, wait: this.wait });
     this.privateLimiter = opts.privateLimiter ?? new RateLimiter({ windows: [], minGapMs: 600, wait: this.wait });
     this.log = opts.log ?? (() => {});
+    const own = makeRedactor([this.token]);
+    this.redact = (s) => own(redactRegistered(s));
   }
 
   get currentBase(): string {
@@ -245,7 +251,7 @@ export class ClientApi {
       }
       if (r.status !== 200) {
         out.status = r.status === 0 ? `error:network:${r.error}` : `unavailable:${r.status}`;
-        out.errorBody = r.text.slice(0, 2000);
+        out.errorBody = redactThenCut(r.text, 2000, this.redact);
         return out;
       }
       out.pages.push(r.text);
@@ -294,8 +300,8 @@ export class ClientApi {
       out.base = this.base;
       if (r.status !== 200) {
         out.status = r.status === 0 ? `error:network:${r.error}` : `unavailable:${r.status}`;
-        if (r.text) out.errorBody = r.text.slice(0, 2000);
-        out.note = firstError(r.text);
+        if (r.text) out.errorBody = redactThenCut(r.text, 2000, this.redact);
+        out.note = firstError(r.text, this.redact);
         return out;
       }
       let body: { result?: unknown; next?: { cursor?: unknown } } | null = null;
@@ -304,8 +310,8 @@ export class ClientApi {
       } catch {}
       if (!body || typeof body !== 'object' || body.result === undefined || body.result === null) {
         out.status = body && typeof body === 'object' ? 'unavailable:no-result' : 'unavailable:non-json';
-        out.errorBody = r.text.slice(0, 2000);
-        out.note = firstError(r.text);
+        out.errorBody = redactThenCut(r.text, 2000, this.redact);
+        out.note = firstError(r.text, this.redact);
         return out;
       }
       out.pages.push(r.text);
@@ -333,14 +339,15 @@ export class ClientApi {
     return out;
   }
 
-  // Single-object endpoint (profile, muted keywords, muted channels).
-  async getObject(path: string, params: Record<string, string | number>, o: { auth?: boolean } = {}): Promise<{ status: string; base: string; text?: string; body?: unknown }> {
+  // Single-object endpoint (profile, muted keywords, muted channels). Any answer but a complete one also
+  // gets errorBody: the answer redacted, then cut to 4,000 characters, for the error file.
+  async getObject(path: string, params: Record<string, string | number>, o: { auth?: boolean } = {}): Promise<{ status: string; base: string; text?: string; body?: unknown; errorBody?: string }> {
     const r = await this.getWithFallback(path, params, { auth: o.auth });
-    if (r.status !== 200) return { status: r.status === 0 ? `error:network:${r.error}` : `unavailable:${r.status}`, base: this.base, text: r.text };
+    if (r.status !== 200) return { status: r.status === 0 ? `error:network:${r.error}` : `unavailable:${r.status}`, base: this.base, text: r.text, errorBody: redactThenCut(r.text, 4000, this.redact) };
     try {
       return { status: 'complete', base: this.base, text: r.text, body: JSON.parse(r.text) };
     } catch {
-      return { status: 'error:non-json', base: this.base, text: r.text };
+      return { status: 'error:non-json', base: this.base, text: r.text, errorBody: redactThenCut(r.text, 4000, this.redact) };
     }
   }
 }

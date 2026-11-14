@@ -7,6 +7,8 @@
 // Also the counting for the own moderation record and the stayed list (D19, D20), whose answer shapes
 // are not documented.
 
+import { redactThenCut } from './secrets.ts';
+
 type Obj = Record<string, unknown>;
 const obj = (v: unknown): Obj | undefined => (v !== null && typeof v === 'object' && !Array.isArray(v) ? (v as Obj) : undefined);
 
@@ -51,8 +53,9 @@ export function statusFromMe(body: unknown): StatusFields | null {
   return out;
 }
 
-// A value as the line shows it: a plain word as it is, anything else as JSON, at most 120 characters.
-const show = (v: unknown): string => (typeof v === 'string' && /^[A-Za-z0-9_.-]{1,40}$/.test(v) ? v : (JSON.stringify(v) ?? String(v)).slice(0, 120));
+// A value as the line shows it: a plain word as it is, anything else as JSON, redacted, then cut to at
+// most 120 characters.
+const show = (v: unknown): string => (typeof v === 'string' && /^[A-Za-z0-9_.-]{1,40}$/.test(v) ? v : redactThenCut(JSON.stringify(v) ?? String(v), 120));
 
 // The line an export prints after its Datasets line, and auth-check after its OK line. nerfed appears
 // only when the answer has it. publicSpamLabel comes only from a profile answer: /v2/me has none.
@@ -112,7 +115,7 @@ export function shapeNote(bodies: unknown[]): string {
   const r = obj(bodies[0])?.result;
   const o = obj(r);
   const keys = o ? Object.keys(o) : [];
-  const fields = keys.slice(0, 12).map((k) => `${k.replace(/[^A-Za-z0-9_]/g, '?').slice(0, 40)}${kind(o?.[k])}`);
+  const fields = keys.slice(0, 12).map((k) => `${redactThenCut(k, 40).replace(/[^A-Za-z0-9_]/g, '?')}${kind(o?.[k])}`);
   const shape = !o ? `result${kind(r)}` : keys.length ? `result: ${fields.join(', ')}${keys.length > 12 ? `, ${keys.length - 12} more` : ''}` : 'result: no fields';
   return `${shape}; pages ${bodies.length}`;
 }

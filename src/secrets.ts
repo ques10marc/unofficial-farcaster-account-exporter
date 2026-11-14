@@ -174,6 +174,13 @@ export function safeErrorText(e: unknown, max = 300): string {
   return s.length > max ? `${s.slice(0, max)}…` : s;
 }
 
+// Text that may hold the token, redacted first and then cut to max characters with no mark, so a cut
+// can never leave part of a token behind and a saved body still ends at exactly max characters.
+export function redactThenCut(s: unknown, max: number, redact: (s: unknown) => string = redactRegistered): string {
+  const r = redact(s);
+  return r.length > max ? r.slice(0, max) : r;
+}
+
 // Returns the relative paths of files containing any variant of the secret. Reads bytes, so it also
 // covers binary files (raw protobuf, media).
 export function scanTreeForSecret(root: string, secret: string): { filesScanned: number; hits: string[] } {

@@ -20,6 +20,18 @@ test('private and loopback addresses are recognised', () => {
   for (const ip of ['::ffff:808:808', '::ffff:8.8.8.8', '64:ff9b::808:808', '2001:4860:4860::8888']) assert.equal(isPrivateAddress(ip), false, ip);
 });
 
+// Release commit 2b's ranges: 18 refused (site-local, 6to4, Teredo, IETF protocol, documentation, local-use
+// NAT64, IPv4-translated) and 9 neighbours that stay allowed, 198.18.0.0/15 among them.
+test('isPrivateAddress: the 2b ranges, 27 rows', () => {
+  const refused = ['fec0::1', 'feff::1', '2002:c0a8:101::1', '2002:808:808::1', '2001:0:4136:e378:8000:63bf:3fff:fdd2', '192.0.0.1', '192.0.0.255', '192.0.2.1', '198.51.100.1', '203.0.113.1', '2001:db8::1', '64:ff9b:1:c0a8:1:100::', '64:ff9b:1:808:8:800::', '64:ff9b:1::c0a8:101', '64:ff9b:1::808:808', '64:ff9b:1:abcd::c0a8:101', '::ffff:0:c0a8:101', '::ffff:0:808:808'];
+  const allowed = ['2001:4860:4860::8888', '2003::1', '192.0.1.1', '192.0.3.1', '198.51.101.1', '203.0.114.1', '2001:db9::1', '198.18.0.1', '198.19.255.254'];
+  const rows: [string, boolean][] = [...refused.map((ip): [string, boolean] => [ip, true]), ...allowed.map((ip): [string, boolean] => [ip, false])];
+  assert.equal(rows.length, 27);
+  assert.equal(rows.filter(([, want]) => want).length, 18);
+  assert.equal(rows.filter(([, want]) => !want).length, 9);
+  for (const [ip, want] of rows) assert.equal(isPrivateAddress(ip), want, ip);
+});
+
 test('media: images stored by sha256, pages and 404s get a status only, private targets refused', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'castsnap-media-'));
   const w = ExportWriter.create(dir, 1);
@@ -176,5 +188,72 @@ test('media: the timeout also covers a body that stops arriving', { timeout: 10_
     await assert.rejects(res.arrayBuffer());
   } finally {
     srv.close();
+  }
+});
+
+// With NODE_USE_ENV_PROXY=1 the global agent sends requests to the proxy in HTTP_PROXY, which looks the host
+// up itself, so checkedLookup would never see it; checkedFetch connects directly (agent: false). The child gets
+// only PATH, NODE_USE_ENV_PROXY and HTTP_PROXY/http_proxy. Its control goes through the global agent with a
+// lookup that always fails, so only the proxy can carry it; if the proxy gets nothing, the test skips.
+test('media: a proxy set in the environment never carries a media request (agent: false)', { timeout: 30_000 }, async (t) => {
+  const { spawn } = await import('node:child_process');
+  const proxied: string[] = [];
+  const targeted: string[] = [];
+  const proxy = await serve((req, res) => {
+    proxied.push(req.url ?? '');
+    res.writeHead(200, { 'content-type': 'text/plain' });
+    res.end('from the proxy');
+  });
+  const target = await serve((req, res) => {
+    targeted.push(req.url ?? '');
+    res.writeHead(200, { 'content-type': 'image/png' });
+    res.end(PNG);
+  });
+  try {
+    const media = new URL('../src/media.ts', import.meta.url).href;
+    const script = `
+      import http from 'node:http';
+      const { checkedFetch } = await import(${JSON.stringify(media)});
+      const out = {};
+      out.control = await new Promise((done) => {
+        const req = http.get('http://media.test:${target.port}/control', { lookup: (host, _o, cb) => cb(new Error('control lookup refused: ' + host)) }, (res) => {
+          let body = '';
+          res.setEncoding('utf8');
+          res.on('data', (c) => (body += c));
+          res.on('end', () => done({ status: res.statusCode, body }));
+        });
+        req.on('error', (e) => done({ error: String(e && e.message) }));
+      });
+      try {
+        const res = await checkedFetch(async () => ['127.0.0.1'], () => false)(new URL('http://media.test:${target.port}/media.png'));
+        out.media = { status: res.status, hex: Buffer.from(await res.arrayBuffer()).toString('hex') };
+      } catch (e) {
+        out.media = { error: String(e && e.message) };
+      }
+      console.log(JSON.stringify(out));
+    `;
+    const proxyUrl = `http://127.0.0.1:${proxy.port}`;
+    const env = { PATH: process.env.PATH ?? '', NODE_USE_ENV_PROXY: '1', HTTP_PROXY: proxyUrl, http_proxy: proxyUrl };
+    const child = spawn(process.execPath, ['--input-type=module', '-e', script], { env, stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+    child.stdout?.setEncoding('utf8').on('data', (c) => (stdout += c));
+    child.stderr?.setEncoding('utf8').on('data', (c) => (stderr += c));
+    const kill = setTimeout(() => child.kill('SIGKILL'), 20_000);
+    const [code, signal] = await new Promise<[number | null, string | null]>((done) => child.on('close', (c, s) => done([c, s])));
+    clearTimeout(kill);
+    t.diagnostic(`proxy test: counting server got ${JSON.stringify(proxied)}, target got ${JSON.stringify(targeted)}`);
+    assert.equal(code, 0, `child exited ${code} ${signal}: ${stderr.slice(-500)}`);
+    const out = JSON.parse(stdout.trim().split('\n').pop() ?? '');
+    if (proxied.length === 0) {
+      t.skip(`the environment proxy is inactive in this Node; the control gave ${JSON.stringify(out.control)}`);
+      return;
+    }
+    assert.deepEqual(proxied, [`http://media.test:${target.port}/control`], 'the counting server got exactly the control request');
+    assert.deepEqual(targeted, ['/media.png'], 'the target got exactly the media request');
+    assert.deepEqual(out.media, { status: 200, hex: PNG.toString('hex') }, "the body fetched is the target's");
+  } finally {
+    proxy.close();
+    target.close();
   }
 });

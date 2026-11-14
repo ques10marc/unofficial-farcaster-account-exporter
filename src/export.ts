@@ -730,7 +730,7 @@ export async function runExport(opts: ExportOptions): Promise<ExportResult> {
       if (r.text !== undefined) {
         const ok = r.status === 'complete';
         const rel = `raw/client/${name}/${ok ? 'page' : 'error'}-0001.json`;
-        writer.write(rel, ok ? r.text : redact(r.text.slice(0, 4000)));
+        writer.write(rel, ok ? r.text : redact(r.errorBody ?? ''));
         files.push(rel);
       }
       const n = r.status === 'complete' ? (o.count ? o.count(r.body) : 1) : 0;
