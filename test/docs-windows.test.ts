@@ -1,4 +1,4 @@
-// The Windows commands in README and USAGE: PowerShell blocks that also work in Windows PowerShell 5.1,
+// The Windows commands in README, USAGE and QUICKSTART: PowerShell blocks that also work in Windows PowerShell 5.1,
 // and the USAGE steps that keep the token off the clipboard history and out of the shell history.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -7,7 +7,7 @@ import { test } from 'node:test';
 
 const repo = path.join(import.meta.dirname, '..');
 const read = (rel: string): string => fs.readFileSync(path.join(repo, rel), 'utf8');
-const DOCS = ['README.md', 'docs/USAGE.md'];
+const DOCS = ['README.md', 'docs/USAGE.md', 'docs/QUICKSTART.md'];
 
 // The body of every fenced powershell block, indented or not.
 function powershellBlocks(rel: string): string[] {
@@ -15,7 +15,7 @@ function powershellBlocks(rel: string): string[] {
   return [...read(rel).matchAll(re)].map((m) => m[2] ?? '');
 }
 
-test('README and USAGE have PowerShell blocks to check', () => {
+test('README, USAGE and QUICKSTART have PowerShell blocks to check', () => {
   for (const rel of DOCS) assert.ok(powershellBlocks(rel).length >= 1, `${rel}: no powershell block found`);
 });
 
@@ -27,10 +27,12 @@ test('PowerShell blocks call curl.exe, never curl', () => {
   }
 });
 
-test('PowerShell blocks have no ~/, no &&, no -MaskInput and no typed token', () => {
+test('PowerShell blocks have no ~/, no ~ that starts a word, no &&, no -MaskInput, no shasum, grep or read -rs, and no typed token', () => {
   for (const rel of DOCS) {
     for (const b of powershellBlocks(rel)) {
       assert.doesNotMatch(b, /~[/\\]/, `${rel}: a powershell block uses ~ in a path`);
+      assert.doesNotMatch(b, /(^|[\s"'(=])~/m, `${rel}: a powershell block starts a word with ~`);
+      for (const w of ['shasum', 'grep', 'read -rs']) assert.ok(!b.includes(w), `${rel}: a powershell block uses ${w}, which is not a PowerShell command`);
       assert.ok(!b.includes('&&'), `${rel}: a powershell block uses &&, which Windows PowerShell 5.1 lacks`);
       assert.ok(!b.includes('-MaskInput'), `${rel}: a powershell block uses -MaskInput, which PowerShell 7 lacks`);
       assert.doesNotMatch(b, /\$env:FC_SESSION_TOKEN\s*=\s*['"]/, `${rel}: a powershell block types the token into the command line`);

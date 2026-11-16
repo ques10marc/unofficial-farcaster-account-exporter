@@ -18,6 +18,7 @@ castsnap exports one Farcaster account (FID) into a new folder that is never mod
 - **`npm test`** runs every test offline, using Node's test runner on `test/**/*.test.ts`.
 - **`npm run typecheck`** runs `tsc` with `noEmit`.
 - Run both checks before you present a change.
+- **A change to an export's files or fields** updates `docs/fields.json`; run `npm run fields` to regenerate `docs/FIELDS.md`.
 
 ## Layout
 

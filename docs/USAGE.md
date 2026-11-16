@@ -9,6 +9,8 @@ If the Farcaster app banned or restricted your account, start with [BANNED_ACCOU
 
 ## Before you start
 
+Step by step for beginners: [QUICKSTART.md](QUICKSTART.md).
+
 - **Node 24 or newer** (`node --version`) and **git**.
 - **Your FID**, your account's number. To look it up, replace `YOUR_USERNAME` with your username (for example `alice` or `alice.eth`), then read the `"fid"` value:
 
@@ -257,7 +259,7 @@ Other commands:
 
 ## Output
 
-Every file and field is described in [FIELDS.md](FIELDS.md).
+[FIELDS.md](FIELDS.md) describes every dataset in an export, and every field of its normalized files, CSVs, `manifest.json`, `media/index.jsonl` and `reconciliation.json`; for the app's raw pages on a `--private` run, their outer keys and the fields castsnap reads.
 
 - **`manifest.json`** holds every source's host, pages, final-cursor state and status, plus the status of each dataset D1–D15, D19 and D20, and the account status (`accountStatus`; see [Account status](#account-status)). A `--private` run also records the token check (`authCheck`: the host and FID, never the token) and one entry per DM conversation (`directCasts`).
 - **`SHA256SUMS`** works with `shasum -a 256 -c SHA256SUMS`, or `sha256sum -c SHA256SUMS`. In PowerShell, use `Get-FileHash` as shown under [Windows](#windows-powershell-and-git-bash). It never lists OS metadata such as `.DS_Store`, which Finder may add later.

@@ -10,6 +10,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { FIELDS_JSON, FIELDS_MD, type FieldsJson, renderFieldsMd } from '../scripts/fields-md.ts';
+import { anchors } from './anchors.ts';
 import { parseCsv } from '../src/csv.ts';
 import { RECONCILIATION_SCHEMA, SCHEMAS } from '../src/schemas.ts';
 import { pickStatus, recordCounts, stayedCount, statusFromMe, statusFromProfile, statusLine } from '../src/status.ts';
@@ -449,27 +450,9 @@ test('no export values or private notes: no 0x and 8 hex digits, no run of 5 or 
   assert.deepEqual(bad, []);
 });
 
-// GitHub's heading anchors, computed here rather than by the generator: lower case, punctuation other
-// than - and _ dropped, spaces to hyphens, and -1, -2 and so on for repeats.
-function anchors(md: string): Set<string> {
-  const seen = new Map<string, number>();
-  const out = new Set<string>();
-  let fence = false;
-  for (const l of md.split('\n')) {
-    if (/^\s*```/.test(l)) fence = !fence;
-    const m = fence ? null : /^#{1,6} (.+?)\s*#*\s*$/.exec(l);
-    if (!m) continue;
-    const base = m[1].toLowerCase().replace(/[^\p{L}\p{N} _-]/gu, '').replace(/ /g, '-');
-    const n = seen.get(base) ?? 0;
-    seen.set(base, n + 1);
-    out.add(n ? `${base}-${n}` : base);
-  }
-  return out;
-}
-
-test('every link to FIELDS.md in README, USAGE and SPEC names a file that exists and, after #, a heading in FIELDS.md', () => {
+test('every link to FIELDS.md in README, USAGE, SPEC, QUICKSTART and BANNED_ACCOUNTS names a file that exists and, after #, a heading in FIELDS.md', () => {
   const problems: string[] = [];
-  for (const rel of ['README.md', 'docs/USAGE.md', 'docs/SPEC.md']) {
+  for (const rel of ['README.md', 'docs/USAGE.md', 'docs/SPEC.md', 'docs/QUICKSTART.md', 'docs/BANNED_ACCOUNTS.md']) {
     const links = [...read(rel).matchAll(/\]\(([^)\s]*FIELDS\.md(?:#[^)\s]*)?)\)/g)].map((m) => m[1]);
     if (!links.length) problems.push(`${rel}: no link to FIELDS.md`);
     for (const link of links) {

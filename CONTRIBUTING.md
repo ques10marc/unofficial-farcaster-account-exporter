@@ -73,6 +73,7 @@ npm run typecheck
 - **Dependencies are pinned to exact versions.** Adding or upgrading one needs an agreed issue first. castsnap handles session tokens, so every dependency is part of its security boundary.
 - **Tests never touch the network or real account data.** Use `test/mock-server.ts` and the recorded public fixtures in `test/fixtures/`.
 - **Never commit export folders** (`fc-export-*`, `quick-*`). `.gitignore` excludes them.
+- **Changing what an export writes?** Update `docs/fields.json` and run `npm run fields` to regenerate `docs/FIELDS.md`.
 
 ## Review and merging
 

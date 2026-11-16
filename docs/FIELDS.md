@@ -2,7 +2,7 @@
 
 # castsnap field reference
 
-What every dataset, file and field in a castsnap export means, in plain words. Each meaning says what it rests on.
+What every dataset in a castsnap export means, and every field of its normalized files, CSVs, `manifest.json`, `media/index.jsonl` and `reconciliation.json`, in plain words. For the app's raw pages on a `--private` run: their outer keys and the fields castsnap reads. Each meaning says what it rests on.
 
 docs/fields.json and docs/FIELDS.md hold no values from real exports. Any example value is invented and labeled as an example.
 
