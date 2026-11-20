@@ -11,6 +11,7 @@ This describes what `castsnap` 0.1.0 exports and how `castsnap verify` grades an
 | `castsnap auth-check --fid N [--base URL]` | Confirm the session token belongs to the FID, via `/v2/me`. Writes nothing |
 | `castsnap verify DIR [--json]` | Check hashes, signatures and schemas, and run the automatable acceptance checks |
 | `castsnap find DIR <query>` | Search an export, for manual spot checks |
+| `castsnap guide` | Ask what to do, the FID and whether to download media, print the equivalent command, and run it on a yes. Needs stdin and stderr to be terminals, or exits 64 asking nothing. A bare `castsnap` in a terminal does the same; without one, it prints the usage text and exits 64 |
 
 Options and exit codes are in [USAGE.md](USAGE.md).
 

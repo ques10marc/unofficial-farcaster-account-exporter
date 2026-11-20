@@ -23,7 +23,8 @@ castsnap exports one Farcaster account (FID) into a new folder that is never mod
 ## Layout
 
 - `bin/castsnap.js`: the entry point. It imports `src/cli.ts`.
-- `src/cli.ts`: the commands and flags (`export`, `auth-check`, `verify`, `find`).
+- `src/cli.ts`: the commands and flags (`export`, `auth-check`, `verify`, `find`, `guide`).
+- `src/guided.ts`: guided mode, its questions and the reader for their visible answers. It hands the command it builds to `main(argv)`, so the token is still read only by `src/secrets.ts`.
 - `src/export.ts`: runs an export.
 - `src/protocol/`: gRPC and HTTP transports, and pagination, for protocol nodes.
 - `src/client.ts`: the client API, the auth check and rate limiting.

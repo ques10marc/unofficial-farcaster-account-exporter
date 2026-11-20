@@ -55,7 +55,7 @@ test('every node bin/castsnap.js line in README and docs uses a command and only
     const m = /^ +castsnap (\S+)(.*)$/.exec(l);
     if (m) usage.set(m[1], new Set(m[2].match(/--[A-Za-z0-9-]+/g) ?? []));
   }
-  assert.deepEqual([...usage.keys()].sort(), ['auth-check', 'export', 'find', 'verify']);
+  assert.deepEqual([...usage.keys()].sort(), ['auth-check', 'export', 'find', 'guide', 'verify']);
   const problems: string[] = [];
   let found = 0;
   for (const rel of DOCS) {

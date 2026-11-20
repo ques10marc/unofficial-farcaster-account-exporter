@@ -71,6 +71,8 @@ In every command below, replace `YOUR_FID` with your FID.
    npm ci --ignore-scripts
    ```
 
+**Rather answer a few questions?** Instead of step 2, run `node bin/castsnap.js guide`. It asks what you want to do, your FID and whether to download media, shows the equivalent command, and runs it if you answer `y`. Then check the export as in step 3. If you choose private data, read [Private data](#private-data) first; your token goes only into the hidden prompt. In a terminal, `node bin/castsnap.js` with no command asks the same questions. On Windows, guided mode is hands-on test pending.
+
 2. **Export your public data.** This needs no token:
 
    ```bash

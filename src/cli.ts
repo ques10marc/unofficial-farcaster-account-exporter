@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { ClientApi, CLIENT_BASES } from './client.ts';
 import { findInExport, formatHits } from './find.ts';
+import { canGuide, runGuided } from './guided.ts';
 import { applyLocation, checkLocation } from './location.ts';
 import { parseMediaScope } from './media.ts';
 import { osDeps, PrivacyError } from './permissions.ts';
@@ -21,6 +22,7 @@ Usage:
   castsnap auth-check --fid N [--base URL]
   castsnap verify DIR [--json]
   castsnap find DIR <query>
+  castsnap guide
 
 export      Protocol data (gRPC ${'snap.farcaster.xyz:3383'}, falling back only to Farcaster's own Snapchain
             nodes) and client data.
@@ -41,6 +43,9 @@ export      Protocol data (gRPC ${'snap.farcaster.xyz:3383'}, falling back only 
 auth-check  Confirm the session token belongs to --fid (GET /v2/me), and show the account status it reports. Writes nothing.
 verify      Offline checks: checksums, signatures, schemas, CSVs, counts, acceptance criteria.
 find        Search an export's normalized data (text, hash prefix, fid, username).
+guide       Ask a few questions, show the equivalent command, then run it on a yes. Needs a terminal.
+            With no command, in a terminal, castsnap asks these questions; otherwise it prints this
+            text and exits 64.
 
 Exit codes: 0 ok; 1 errors, failed checks or a rejected token; 2 token found in output; 64 usage; 130 interrupted.`;
 
@@ -100,6 +105,7 @@ function parseFlags(argv: string[], allowed: Set<string>) {
 
 export async function main(argv: string[]): Promise<number> {
   const [cmd, ...rest] = argv;
+  if (!cmd && canGuide()) return guided();
   if (!cmd || cmd === '--help' || cmd === '-h' || cmd === 'help') {
     console.log(USAGE);
     return cmd ? 0 : 64;
@@ -107,6 +113,14 @@ export async function main(argv: string[]): Promise<number> {
   if (cmd === '--version') {
     console.log(VERSION);
     return 0;
+  }
+  if (cmd === 'guide') {
+    if (rest.length) throw new UsageError(named('unknown argument', rest[0]));
+    if (!canGuide()) {
+      console.error('guided mode needs a terminal; see castsnap --help');
+      return 64;
+    }
+    return guided();
   }
   if (cmd === 'export') {
     const o = parseFlags(rest, new Set(['--fid', '--out', '--media', '--hub', '--base', '--private', '--allow-unsafe-location']));
@@ -166,6 +180,16 @@ export async function main(argv: string[]): Promise<number> {
     return hits.length ? 0 : 1;
   }
   throw new UsageError(named('unknown command', cmd));
+}
+
+async function guided(): Promise<number> {
+  let argv: string[] | null;
+  try {
+    argv = await runGuided();
+  } catch (e) {
+    throw new UserError(e instanceof Error ? e.message : String(e));
+  }
+  return argv ? main(argv) : 0;
 }
 
 // The last resort for errors, including any thrown outside main()'s promise chain, which Node would

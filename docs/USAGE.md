@@ -57,6 +57,31 @@ node bin/castsnap.js verify "PASTE_THE_FOLDER_HERE"
 - `N/A` marks criteria that don't apply to that export, for example the private criteria on a run without `--private`.
 - After the checks, it prints the **manual checks** that only you can do; see [below](#manual-checks).
 
+## Guided mode
+
+Instead of typing a command, you can answer a few questions:
+
+```bash
+node bin/castsnap.js guide
+```
+
+In a terminal, `node bin/castsnap.js` with no command does the same. Before guided mode it printed the usage text and exited 64, and it still does when stdin or stderr isn't a terminal.
+
+| Question | Answer | What it adds to the command |
+|---|---|---|
+| What do you want to do? | `1`, `2` or `3` | `export`, `export --private` or `auth-check` |
+| Your FID | digits | `--fid N` |
+| Download images and other media too? (options 1 and 2) | `y` or `n` | nothing, or `--media none` |
+| Continue? (options 2 and 3, after "Read first") | `y` or `n` | nothing; `n` stops |
+| Run it now? | `y` or `n` | nothing; `n` stops |
+
+- **No defaults.** An empty answer asks again. If you type a character the question doesn't allow, nothing you typed for that answer stays on screen, and the question is asked again.
+- **The command comes first.** At "Run it now?", castsnap prints the equivalent command, which you can run yourself later. It never holds your token.
+- **Your token** goes only into the hidden prompt, which comes after "Run it now?"; see [Private data: your session token](#private-data-your-session-token). If `FC_SESSION_TOKEN` is set, castsnap says so, by name only, and uses it.
+- **Not asked:** `--out`, `--hub`, `--base` and `--allow-unsafe-location`; `verify` and `find` you run yourself. An export always goes to the default folder, `~/FarcasterExports`. If `--private` stops because of where that folder is (see [Security (read first)](#security-read-first)), run the printed command yourself with `--out` and a local folder added.
+- **Exit codes:** Ctrl+C at any question cancels with exit 1, as at the token prompt. `n` at "Continue?" or "Run it now?" runs nothing and exits 0. Without a terminal, `node bin/castsnap.js guide` asks nothing and exits 64.
+- **Windows:** guided mode is hands-on test pending, in PowerShell and in Git Bash.
+
 ## Private data: your session token
 
 ### Security (read first)
@@ -251,6 +276,7 @@ node bin/castsnap.js find "PASTE_THE_FOLDER_HERE" "PASTE A PHRASE HERE"
 
 Other commands:
 
+- **`node bin/castsnap.js guide`** asks a few questions, shows the equivalent command, and runs it if you answer `y`; see [Guided mode](#guided-mode).
 - **`node bin/castsnap.js auth-check --fid N [--base URL]`** checks the session token against `/v2/me` and writes nothing.
 - **`node bin/castsnap.js find DIR <text | 0xhash-prefix | fid | username>`** searches an export, for spot checks.
 - **`node scripts/import-check.mjs DIR`** rebuilds following, followers and bookmarks (with cast text) from the export alone, with network access blocked. On macOS, `sandbox-exec -p '(version 1)(allow default)(deny network*)' node scripts/import-check.mjs DIR` has the operating system enforce that.

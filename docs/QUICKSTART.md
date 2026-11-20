@@ -15,6 +15,8 @@ This guide takes you from a new terminal to a checked export of your public Farc
 - **Windows, in Git Bash:** follow [macOS and Linux](#macos-and-linux). Git Bash comes with Git for Windows and runs those commands as written.
 - **Windows, in PowerShell:** follow [Windows PowerShell](#windows-powershell). In cmd, use PowerShell instead.
 
+In either section, you can answer a few questions instead of typing step 5's command: see [Guided mode](#guided-mode).
+
 ## macOS and Linux
 
 1. **Open a terminal.** On macOS, open the **Terminal** app (in Applications, then Utilities). On Linux, open your terminal app. On Windows, open **Git Bash**.
@@ -164,6 +166,16 @@ In PowerShell:
 Set-Location "PASTE_THE_FOLDER_HERE"
 Get-Content SHA256SUMS | ForEach-Object { $h,$f = $_ -split '  ',2; if ((Get-FileHash -Algorithm SHA256 -LiteralPath $f).Hash -ne $h) { "FAILED: $f" } }
 ```
+
+## Guided mode
+
+Instead of typing step 5's command, you can let castsnap ask you a few questions. After step 4, in the same window, run this. It's the same command in Terminal, Git Bash and PowerShell:
+
+```
+node bin/castsnap.js guide
+```
+
+It asks what you want to do, your FID and whether to download media, shows the equivalent command, and runs it if you answer `y`. Then check the export as in step 6. Choosing private data needs your session token: read [Private data](#private-data) first. On Windows, guided mode is hands-on test pending. [Guided mode](USAGE.md#guided-mode) in USAGE.md has the details.
 
 ## What you'll see
 
